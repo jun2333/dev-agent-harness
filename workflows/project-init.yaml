@@ -1,0 +1,43 @@
+name: project-init
+description: 从零开始的项目初始化流程（技术选型 + 标准定制 + 脚手架搭建）
+
+# 任务开始前
+pre_task:
+  - skill: skills/state-checkpoint.md
+    action: init
+
+stages:
+  - name: project-init
+    skill: skills/project-init.md
+    sub_command: full
+    input: task.md
+    output: [tech-selection.md, project-standards.md]
+    gate: user_approval
+    post_stage:
+      - skill: skills/state-checkpoint.md
+        action: save
+
+  - name: reflecting
+    skill: skills/reflecting.md
+    sub_command: reflect
+    input: [task.md, tech-selection.md, project-standards.md, execution-log.md]
+    output: [lessons-draft.md, skill-improvements-draft.md]
+    post_stage:
+      - skill: skills/state-checkpoint.md
+        action: save
+
+  - name: git-operations
+    skill: .harness/knowledge/skills/git-operations/skill.md
+    sub_command: commit
+    input: [tech-selection.md, project-standards.md]
+    output: changes.md
+    gate: user_approval
+    optional: true
+    post_stage:
+      - skill: skills/state-checkpoint.md
+        action: complete
+
+post_task:
+  - skill: skills/reflecting.md
+    sub_command: collect
+    trigger: manual

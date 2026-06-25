@@ -1,0 +1,80 @@
+name: refactor
+description: 重构流程
+
+# 任务开始前
+pre_task:
+  - skill: skills/state-checkpoint.md
+    action: init
+
+stages:
+  - name: designing
+    skill: .harness/knowledge/skills/designing/skill.md
+    input: task.md
+    output: design.md
+    gate: user_approval
+    post_stage:
+      - skill: skills/state-checkpoint.md
+        action: save
+
+  - name: task-planning
+    skill: .harness/knowledge/skills/task-planning/skill.md
+    input: [task.md, design.md]
+    output: task-plan.md
+    gate: user_approval
+    post_stage:
+      - skill: skills/state-checkpoint.md
+        action: save
+
+  - name: implementing
+    skill: .harness/knowledge/skills/implementing/skill.md
+    input: [task.md, design.md, task-plan.md]
+    output: changes.md
+    gate: none
+    post_stage:
+      - skill: skills/state-checkpoint.md
+        action: save
+
+  - name: testing
+    skill: .harness/knowledge/skills/testing/skill.md
+    input: [task.md, task-plan.md, changes.md]
+    output: test-report.md
+    gate: user_approval
+    on_fail: implementing
+    post_stage:
+      - skill: skills/state-checkpoint.md
+        action: save
+
+  - name: reviewing
+    skill: .harness/knowledge/skills/reviewing/skill.md
+    input: [design.md, changes.md, test-report.md]
+    output: review-report.md
+    gate: user_approval
+    on_fail: implementing
+    post_stage:
+      - skill: skills/state-checkpoint.md
+        action: save
+
+  - name: reflecting
+    skill: skills/reflecting.md
+    sub_command: reflect
+    input: [task.md, design.md, task-plan.md, test-report.md, review-report.md, execution-log.md]
+    output: [lessons-draft.md, skill-improvements-draft.md]
+    post_stage:
+      - skill: skills/state-checkpoint.md
+        action: save
+
+  - name: git-operations
+    skill: .harness/knowledge/skills/git-operations/skill.md
+    sub_command: commit
+    input: [changes.md, review-report.md]
+    output: changes.md
+    gate: user_approval
+    optional: true
+    post_stage:
+      - skill: skills/state-checkpoint.md
+        action: complete
+
+post_task:
+  - skill: skills/reflecting.md
+    sub_command: collect
+    trigger: manual
