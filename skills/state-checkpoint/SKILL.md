@@ -8,6 +8,20 @@ description: 状态记录与断点恢复。自动触发：workflow 的 pre_task 
 ## Overview
 记录任务执行进度，提供断点恢复能力。每个 stage 完成后自动记录检查点，启动时自动检测未完成的任务。
 
+## 确定性输入与语义判断
+
+本技能主要涉及确定性工作：
+
+### 确定性输入（从实际状态读取）
+- workspace/{task-id}/ 下的文件列表
+- 当前 workflow 和 stage 名称（来自 workflow YAML 定义）
+- git commit hash（通过 `git rev-parse HEAD` 获取）
+- checkpoint.json 中已记录的状态
+
+### 语义判断（仅在恢复任务时需要）
+- 从断点继续时，下一步该做什么（基于已完成的阶段和上下文推断）
+- 是否需要向用户确认恢复方案
+
 ## 触发方式
 
 ### 自动触发

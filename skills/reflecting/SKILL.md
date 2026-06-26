@@ -24,13 +24,19 @@ description: 项目复盘 + 经验收集。阶段一自动触发：workflow 最�
 
 ## 阶段一：自动复盘
 
-### 输入
+### 确定性输入（从以下文件读取，不臆造）
 - workspace/{task-id}/task.md
 - workspace/{task-id}/design.md
 - workspace/{task-id}/task-plan.md
 - workspace/{task-id}/test-report.md
 - workspace/{task-id}/review-report.md
 - workspace/{task-id}/execution-log.md
+
+### 语义判断（基于上述输入推断，标注依据）
+- 哪些经验值得沉淀（基于问题的影响面和复用概率）
+- 计划与实际执行的差异分析（基于对比两份文档）
+- skill 执行中的不足评估（基于 agent 自检 + 用户反馈）
+- 技能改进建议的优先级
 
 ### 执行步骤
 1. 回顾任务执行全过程
@@ -50,14 +56,19 @@ description: 项目复盘 + 经验收集。阶段一自动触发：workflow 最�
 
 ## 阶段二：手动收集
 
-### 输入
+### 确定性输入（从以下文件读取）
 - workspace/{task-id}/lessons-draft.md
 - 用户指定的编号（如"收集第 1、3 条"）
+
+### 语义判断（基于输入推断）
+- 生成的 frontmatter 是否准确（tags、confidence 等）
+- 失效条件（invalidation_condition）是否具体可验证
+- 回源路径（source_refs）是否指向正确的源码文件
 
 ### 执行步骤
 1. 读取 lessons-draft.md
 2. 根据用户指定的编号，将对应条目标题加上 `✅` 标记
-3. 筛选带 `✅` 的经验，生成 frontmatter（tags, confidence, created, use_count, source_task, status）
+3. 筛选带 `✅` 的经验，生成 frontmatter（tags, confidence, created, use_count, source_task, status, invalidation_condition, source_refs）
 4. 写入 knowledge/lessons/ 目录
 5. 更新 knowledge/_index.md（如需要）
 6. 清理已收集的草稿
@@ -84,6 +95,8 @@ description: 项目复盘 + 经验收集。阶段一自动触发：workflow 最�
 - 场景: [什么时候会遇到]
 - 问题: [具体问题]
 - 解决方案: [怎么解决]
+- 失效条件: [什么情况下这条经验会过时，必须是具体可验证的条件]
+- 回源路径: [关联的源码文件路径列表，用于日后验证经验是否仍然有效]
 
 ### 经验 2: ...
 

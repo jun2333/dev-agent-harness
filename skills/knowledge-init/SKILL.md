@@ -18,6 +18,17 @@ description: 知识库初始化与维护。手动触发：用户说"初始化知
 ## 子命令：scan
 扫描项目，生成 knowledge 初版。
 
+### 确定性输入（从项目文件读取）
+- 项目配置文件（package.json / go.mod / pyproject.toml 等）
+- 项目目录结构
+- 代码文件的命名和组织方式
+- 测试配置文件和测试目录结构
+
+### 语义判断（基于输入推断）
+- 代码风格总结（命名规范、import 风格等）
+- 测试策略归纳（框架选择、组织方式等）
+- 常见模式识别和提炼
+
 ### 执行步骤
 1. 读取项目配置文件，识别技术栈和框架
 2. 扫描项目目录结构，理解模块划分
@@ -88,11 +99,22 @@ description: 知识库初始化与维护。手动触发：用户说"初始化知
 ## 子命令：optimize
 整理索引、合并重复、归档过期条目。
 
+### 确定性输入（从知识库文件读取）
+- knowledge/lessons/ 和 knowledge/patterns/ 下所有文件的 frontmatter
+- 各文件的 tags、confidence、use_count、created、last_used
+- 各文件的 source_refs 和 invalidation_condition
+
+### 语义判断（基于输入推断）
+- 哪些条目重复需要合并（基于标签和场景相似度）
+- 哪些条目因回源文件变更而需要更新或归档
+- 哪些条目可以晋升为 pattern
+
 ### 执行步骤
 1. 扫描 knowledge/lessons/ 和 knowledge/patterns/
-2. 识别标签高度重合的条目，建议合并
-3. 检查过期条目（90 天未引用），标记 status: archived
-4. 更新 _index.md 推荐列表
+2. 对有 `source_refs` 的条目，检查关联源码文件是否有变更，有变更则标记待审核
+3. 识别标签高度重合的条目，建议合并
+4. 检查过期条目（90 天未引用且无 source_refs），标记 status: archived
+5. 更新 _index.md 推荐列表
 
 ### 输出
 - 更新 knowledge/lessons/*.md（status 字段）
@@ -114,6 +136,8 @@ last_used: 2026-06-24
 use_count: 3
 source_task: task-xxx
 status: active
+invalidation_condition: "当 XX 库升级到 vN 且 API 变更时，本条经验失效"
+source_refs: [src/path/to/file.ts, src/path/to/other.ts]
 ---
 
 # 标题
@@ -128,8 +152,13 @@ status: active
 ...
 ```
 
+### 字段说明
+- `invalidation_condition`：描述什么情况下这条经验会过时，必须是具体可验证的条件（如"NextAuth 升级到 v6"、"Prisma 移除单例模式"），不能是模糊描述（如"框架更新时"）
+- `source_refs`：关联的源码文件路径列表，用于日后验证经验是否仍然有效。`optimize` 子命令会检查这些文件是否有变更
+
 ## 淘汰规则
-1. **过期淘汰**：创建超过 90 天且 use_count = 0 → 移入 knowledge/archive/
-2. **低置信度淘汰**：confidence < 0.3 → 归档
-3. **重复合并**：两条教训标签高度重合且场景相似 → 合并为一条
-4. **晋升机制**：use_count >= 5 且 confidence >= 0.8 → 建议提升为 pattern（人工确认）
+1. **回源检查**（优先）：`source_refs` 指向的文件存在变更 → 触发失效判断，人工确认后更新或归档
+2. **过期淘汰**：创建超过 90 天且 use_count = 0 且无 `source_refs` → 移入 knowledge/archive/
+3. **低置信度淘汰**：confidence < 0.3 → 归档
+4. **重复合并**：两条教训标签高度重合且场景相似 → 合并为一条
+5. **晋升机制**：use_count >= 5 且 confidence >= 0.8 → 建议提升为 pattern（人工确认）
