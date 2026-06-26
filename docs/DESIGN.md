@@ -51,7 +51,7 @@
 ┌──────────────────────────▼──────────────────────────────────┐
 │                    目标项目（项目层）                          │
 │                                                             │
-│  .harness/knowledge/skills/                                 │
+│  knowledge/skills/                                 │
 │  ├── designing/           ← 项目实现的 designing skill       │
 │  │   ├── skill.md           （skill 入口 prompt）            │
 │  │   ├── templates/         （该技能的产出模板）              │
@@ -85,7 +85,7 @@
 │      ├── templates/                                          │
 │      └── scripts/                                            │
 │                                                             │
-│  .harness/knowledge/                                        │
+│  knowledge/                                        │
 │  ├── standards/           ← 项目编码规范、测试规范            │
 │  ├── patterns/            ← 项目最佳实践、代码模式            │
 │  ├── lessons/             ← 项目经验教训                      │
@@ -101,7 +101,7 @@
 | 层级 | 位置 | 内容 | 维护者 |
 |------|------|------|--------|
 | 通用层 | harness 仓库 | workflow 编排 + skill 接口规范 + 通用 skill（reflecting / knowledge-init / state-checkpoint） | harness 维护者 |
-| 项目层 | `.harness/knowledge/` | 项目特定 skill 实现（含 git-operations）+ 项目规范/经验/模板 | 项目团队 + Agent（knowledge-init） |
+| 项目层 | `knowledge/` | 项目特定 skill 实现（含 git-operations）+ 项目规范/经验/模板 | 项目团队 + Agent（knowledge-init） |
 
 ### Skill 接口规范
 
@@ -141,10 +141,10 @@
 
 当项目层和通用层存在同名内容时：
 
-1. **Skill 实现**：`.harness/knowledge/skills/{name}/skill.md` 覆盖 harness 默认（如有）
-2. **报告模板**：`.harness/knowledge/skills/{name}/templates/` > harness 仓库 `templates/`
-3. **项目规范**：`.harness/knowledge/standards/` 由 skill 的上下文加载指令主动读取
-4. **最佳实践**：`.harness/knowledge/patterns/` 通过 `_index.md` 语义匹配加载
+1. **Skill 实现**：`knowledge/skills/{name}/skill.md` 覆盖 harness 默认（如有）
+2. **报告模板**：`knowledge/skills/{name}/templates/` > harness 仓库 `templates/`
+3. **项目规范**：`knowledge/standards/` 由 skill 的上下文加载指令主动读取
+4. **最佳实践**：`knowledge/patterns/` 通过 `_index.md` 语义匹配加载
 
 ### 知识库维护入口
 
@@ -387,7 +387,7 @@ Skill 分为两类：
 生成业务 skill 目录和默认模板。
 
 1. 读取 skill-interface.md 获取接口规范
-2. 为每个业务 skill 创建目录（.harness/knowledge/skills/{name}/）
+2. 为每个业务 skill 创建目录（knowledge/skills/{name}/）
 3. 为每个 skill 生成默认 skill.md（基于接口规范）
 4. 为每个 skill 的 templates/ 生成默认报告模板
 
@@ -411,7 +411,7 @@ Skill 分为两类：
 
 以下为 knowledge-init 生成的默认 skill 示例，项目可根据需要修改：
 
-##### .harness/knowledge/skills/designing/skill.md
+##### knowledge/skills/designing/skill.md
 
 ```markdown
 # Designing Skill
@@ -440,7 +440,7 @@ Skill 分为两类：
 5. 如有多个方案，给出对比分析并推荐
 
 ## 输出
-生成 workspace/{task-id}/design.md，格式见 .harness/knowledge/skills/designing/templates/design-output.md
+生成 workspace/{task-id}/design.md，格式见 knowledge/skills/designing/templates/design-output.md
 
 ## 约束
 - 方案必须贴合项目现有技术栈，不引入不必要的新技术
@@ -448,7 +448,7 @@ Skill 分为两类：
 - 如果任务范围过大，建议拆分为多个子任务
 ```
 
-##### .harness/knowledge/skills/git-operations/skill.md
+##### knowledge/skills/git-operations/skill.md
 
 ```markdown
 # Git Operations Skill
@@ -484,7 +484,7 @@ Skill 分为两类：
 - 代码回滚使用 git checkout，不修改 git 历史
 ```
 
-##### .harness/knowledge/skills/project-init/skill.md
+##### knowledge/skills/project-init/skill.md
 
 ```markdown
 # Project Init Skill
@@ -557,7 +557,7 @@ pre_task:
 
 stages:
   - name: designing
-    skill: .harness/knowledge/skills/designing/skill.md
+    skill: knowledge/skills/designing/skill.md
     input: task.md
     output: design.md
     gate: user_approval
@@ -566,7 +566,7 @@ stages:
         action: save                     # 记录检查点
 
   - name: task-planning
-    skill: .harness/knowledge/skills/task-planning/skill.md
+    skill: knowledge/skills/task-planning/skill.md
     input: [task.md, design.md]
     output: task-plan.md
     gate: user_approval
@@ -575,7 +575,7 @@ stages:
         action: save
 
   - name: implementing
-    skill: .harness/knowledge/skills/implementing/skill.md
+    skill: knowledge/skills/implementing/skill.md
     input: [task.md, design.md, task-plan.md]
     output: changes.md
     gate: none
@@ -584,7 +584,7 @@ stages:
         action: save
 
   - name: testing
-    skill: .harness/knowledge/skills/testing/skill.md
+    skill: knowledge/skills/testing/skill.md
     input: [task.md, task-plan.md, changes.md]
     output: test-report.md
     gate: user_approval
@@ -594,7 +594,7 @@ stages:
         action: save
 
   - name: reviewing
-    skill: .harness/knowledge/skills/reviewing/skill.md
+    skill: knowledge/skills/reviewing/skill.md
     input: [design.md, changes.md, test-report.md]
     output: review-report.md
     gate: user_approval
@@ -613,7 +613,7 @@ stages:
         action: save
 
   - name: git-operations
-    skill: .harness/knowledge/skills/git-operations/skill.md
+    skill: knowledge/skills/git-operations/skill.md
     sub_command: commit
     input: [changes.md, review-report.md]
     output: changes.md
@@ -754,7 +754,7 @@ status: active
 
 ### 6. Templates — 产出模板
 
-模板现在属于各 skill 目录的一部分（`.harness/knowledge/skills/{name}/templates/`）。
+模板现在属于各 skill 目录的一部分（`knowledge/skills/{name}/templates/`）。
 
 harness 仓库的 `templates/` 目录存放默认模板，knowledge-init 初始化时会基于这些默认模板生成项目层的模板。项目可覆盖或自定义。
 
@@ -844,7 +844,7 @@ design.md
   │
   ▼
 ┌─ Stage 1: Designing ─────────────────────────────┐
-│  加载: .harness/knowledge/skills/designing/       │
+│  加载: knowledge/skills/designing/       │
 │         skill.md                                  │
 │  上下文:                                          │
 │    - knowledge/_index.md → 匹配到认证相关经验      │
@@ -856,7 +856,7 @@ design.md
   │
   ▼
 ┌─ Stage 2: Task Planning ─────────────────────────┐
-│  加载: .harness/knowledge/skills/task-planning/   │
+│  加载: knowledge/skills/task-planning/   │
 │         skill.md                                  │
 │  上下文:                                          │
 │    - design.md（技术方案作为输入）                  │
@@ -866,7 +866,7 @@ design.md
   │
   ▼
 ┌─ Stage 3: Implementing ──────────────────────────┐
-│  加载: .harness/knowledge/skills/implementing/    │
+│  加载: knowledge/skills/implementing/    │
 │         skill.md + task-plan.md                   │
 │  上下文:                                          │
 │    - task-plan.md 中列出的文件（精读）              │
@@ -877,7 +877,7 @@ design.md
   │
   ▼
 ┌─ Stage 4: Testing ───────────────────────────────┐
-│  加载: .harness/knowledge/skills/testing/         │
+│  加载: knowledge/skills/testing/         │
 │         skill.md                                  │
 │  上下文:                                          │
 │    - changes.md（知道改了什么）                     │
@@ -889,7 +889,7 @@ design.md
   │
   ▼
 ┌─ Stage 5: Reviewing ─────────────────────────────┐
-│  加载: .harness/knowledge/skills/reviewing/       │
+│  加载: knowledge/skills/reviewing/       │
 │         skill.md                                  │
 │  上下文: diff + 项目规范                           │
 │  执行: 按 checklist 审查                           │
@@ -1032,12 +1032,12 @@ workspace/{task-id}/skill-improvements-draft.md  ← 技能改进建议草稿（
 ## 待审核改进
 
 ### 改进 1: designing skill — 缺少数据库迁移文件扫描
-- 文件: .harness/knowledge/skills/designing/skill.md
+- 文件: knowledge/skills/designing/skill.md
 - 问题: 上下文加载指令未提及扫描 migration 文件，导致设计时遗漏了数据库变更影响
 - 建议: 在"上下文加载指令"中增加一步："扫描 db/migrations/ 目录，了解最近的数据库变更"
 
 ### 改进 2: testing skill — 测试报告模板缺少性能指标
-- 文件: .harness/knowledge/skills/testing/templates/test-report-output.md
+- 文件: knowledge/skills/testing/templates/test-report-output.md
 - 问题: 模板中没有性能测试相关字段
 - 建议: 在模板中增加"性能指标"section
 

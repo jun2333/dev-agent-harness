@@ -24,6 +24,14 @@
 - 遇到问题主动询问，不要猜测
 - 任务结束后提示用户审核经验草稿并收集
 
+## 技能执行留痕
+
+每个技能执行完后，必须写入 skill-log：
+- 文件位置：`workspace/{task-id}/skill-logs/{skill-name}.md`
+- 写入空模板（含时间戳和任务信息），问题描述和改进建议留空
+- 后续对话中如发现技能不足，主动补填对应的 skill-log
+- 这是框架行为，不需要用户触发
+
 ## 断点恢复
 
 启动时检查 workspace/ 目录中是否有未完成的 checkpoint.json：
@@ -35,3 +43,9 @@
 用户审核草稿后，支持以下调用方式：
 - 对话中说"收集经验"或"reflecting collect"
 - 执行 reflecting collect {task-id}
+
+## 技能进化
+
+技能改进独立于项目经验流程，手动触发：
+- `skill-evolution review` — 汇总所有 skill-logs，清理空模板，生成改进建议草稿
+- `skill-evolution apply` — 用户确认后修改对应 SKILL.md

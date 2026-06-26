@@ -16,18 +16,19 @@ stages:
     post_stage:
       - skill: skills/state-checkpoint.md
         action: save
+      - action: skill-log
 
   - name: reflecting
     skill: skills/reflecting.md
     sub_command: reflect
     input: [task.md, tech-selection.md, project-standards.md, execution-log.md]
-    output: [lessons-draft.md, skill-improvements-draft.md]
+    output: lessons-draft.md
     post_stage:
       - skill: skills/state-checkpoint.md
         action: save
 
   - name: git-operations
-    skill: .harness/knowledge/skills/git-operations/skill.md
+    skill: knowledge/skills/git-operations/skill.md
     sub_command: commit
     input: [tech-selection.md, project-standards.md]
     output: changes.md

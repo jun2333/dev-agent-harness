@@ -27,30 +27,61 @@ description: 知识库初始化与维护。手动触发：用户说"初始化知
 6. 生成 knowledge/standards/testing-rules.md
 7. 提取项目中的常见模式到 knowledge/patterns/
 8. 生成 knowledge/_index.md 推荐列表
+9. 在项目根目录生成 AGENTS.md，引导 agent 读取 `.harness/harness.md` 启动工作流
 
 ### 输出
 - knowledge/standards/code-style.md
 - knowledge/standards/testing-rules.md
 - knowledge/patterns/*.md
 - knowledge/_index.md
+- AGENTS.md（项目根目录，引导 agent 使用 harness 工作流）
 
 ### 约束
 - 生成的规范必须基于项目实际代码，不臆造
 
 ## 子命令：skills
-生成业务 skill 目录和默认模板。
+基于 scan 产出的知识库（standards/、patterns/），生成贴合项目实际的工作流阶段技能。
+
+**核心原则：所有内容必须从 scan 产出中推导，不能凭空捏造。**
+
+**业务 skill = 工作流的阶段技能**，不是项目的业务领域模块。固定为以下 6 个：
+- `designing` — 技术设计阶段
+- `task-planning` — 任务计划阶段
+- `implementing` — 实施阶段
+- `testing` — 测试阶段
+- `reviewing` — 审查阶段
+- `git-operations` — Git 提交与回滚
+
+### 前置条件
+- 必须先执行 `scan`，确保 knowledge/standards/ 和 knowledge/patterns/ 已生成
 
 ### 执行步骤
 1. 读取 skill-interface.md 获取接口规范
-2. 为每个业务 skill 创建目录（.harness/knowledge/skills/{name}/）
-3. 为每个 skill 生成默认 skill.md（基于接口规范）
-4. 为每个 skill 的 templates/ 生成默认报告模板
+2. 读取 knowledge/standards/ 了解项目编码规范和测试规范
+3. 读取 knowledge/patterns/ 了解项目的代码模式和架构惯例
+4. 为上述 6 个阶段技能各创建目录（knowledge/skills/{name}/）
+5. 为每个 skill 生成 SKILL.md，内容必须包含：
+   - **角色**：该阶段的职责定位
+   - **输入**：该阶段需要什么
+   - **上下文加载指令**：基于项目实际技术栈（从 scan 产出中获取），告诉 AI 该加载哪些文件、参考哪些 pattern
+   - **执行步骤**：贴合项目实际的执行流程
+   - **输出**：产出文件说明
+   - **约束**：基于项目规范的约束条件
+6. 为需要的 skill 生成 templates/ 产出模板
+
+### 示例：scan 发现项目使用 tRPC + Prisma + Vitest
+则生成的技能中应包含：
+- designing 的上下文加载指令应提到"读取 prisma/schema.prisma 了解数据模型"
+- implementing 的上下文加载指令应提到"参考 patterns/trpc-router.md 创建新的 router"
+- testing 的执行步骤应提到"运行 npx vitest"而非泛泛的"运行测试"
+- reviewing 的约束应引用 standards/code-style.md 中的具体规范
 
 ### 输出
-- .harness/knowledge/skills/{name}/skill.md
-- .harness/knowledge/skills/{name}/templates/*.md
+- knowledge/skills/{name}/SKILL.md
+- knowledge/skills/{name}/templates/*.md（如需要）
 
 ### 约束
+- 所有内容必须基于 scan 产出，不能凭空捏造
 - 生成的 skill 必须符合 skill-interface.md 定义的接口规范
 - 生成的报告模板作为默认模板，项目可覆盖
 
