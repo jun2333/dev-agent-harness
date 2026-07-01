@@ -1,0 +1,53 @@
+name: skill-creation
+description: 创建或重构 harness 技能的工作流（非代码任务）
+
+# 任务开始前
+pre_task:
+  - skill: skills/framework/state-checkpoint.md
+    action: init
+
+stages:
+  - name: designing
+    skill: skills/skill-creation/skill-design.md
+    input: task.md
+    output: design.md
+    gate: user_approval
+    post_stage:
+      - skill: skills/framework/state-checkpoint.md
+        action: save
+      - action: skill-log
+
+  - name: implementing
+    skill: skills/skill-creation/skill-implement.md
+    input: [task.md, design.md]
+    output: changes.md
+    gate: none
+    post_stage:
+      - skill: skills/framework/state-checkpoint.md
+        action: save
+      - action: skill-log
+
+  - name: testing
+    skill: skills/skill-creation/skill-test.md
+    input: [task.md, design.md, changes.md]
+    output: test-report.md
+    gate: user_approval
+    on_fail: implementing
+    post_stage:
+      - skill: skills/framework/state-checkpoint.md
+        action: save
+      - action: skill-log
+
+  - name: reflecting
+    skill: skills/framework/reflecting.md
+    sub_command: reflect
+    input: [task.md, design.md, changes.md, test-report.md, execution-log.md]
+    output: lessons-draft.md
+    post_stage:
+      - skill: skills/framework/state-checkpoint.md
+        action: complete
+
+post_task:
+  - skill: skills/framework/reflecting.md
+    sub_command: collect
+    trigger: manual

@@ -3,7 +3,7 @@ description: 新功能开发流程
 
 # 任务开始前
 pre_task:
-  - skill: skills/state-checkpoint.md
+  - skill: skills/framework/state-checkpoint.md
     action: init
 
 stages:
@@ -13,7 +13,7 @@ stages:
     output: design.md
     gate: user_approval
     post_stage:
-      - skill: skills/state-checkpoint.md
+      - skill: skills/framework/state-checkpoint.md
         action: save
       - action: skill-log
 
@@ -23,7 +23,7 @@ stages:
     output: task-plan.md
     gate: user_approval
     post_stage:
-      - skill: skills/state-checkpoint.md
+      - skill: skills/framework/state-checkpoint.md
         action: save
       - action: skill-log
 
@@ -33,7 +33,7 @@ stages:
     output: changes.md
     gate: none
     post_stage:
-      - skill: skills/state-checkpoint.md
+      - skill: skills/framework/state-checkpoint.md
         action: save
       - action: skill-log
 
@@ -44,7 +44,7 @@ stages:
     gate: user_approval
     on_fail: implementing
     post_stage:
-      - skill: skills/state-checkpoint.md
+      - skill: skills/framework/state-checkpoint.md
         action: save
       - action: skill-log
 
@@ -55,17 +55,17 @@ stages:
     gate: user_approval
     on_fail: implementing
     post_stage:
-      - skill: skills/state-checkpoint.md
+      - skill: skills/framework/state-checkpoint.md
         action: save
       - action: skill-log
 
   - name: reflecting
-    skill: skills/reflecting.md
+    skill: skills/framework/reflecting.md
     sub_command: reflect
     input: [task.md, design.md, task-plan.md, test-report.md, review-report.md, execution-log.md]
     output: lessons-draft.md
     post_stage:
-      - skill: skills/state-checkpoint.md
+      - skill: skills/framework/state-checkpoint.md
         action: save
 
   - name: git-operations
@@ -76,7 +76,7 @@ stages:
     gate: user_approval
     optional: true
     post_stage:
-      - skill: skills/state-checkpoint.md
+      - skill: skills/framework/state-checkpoint.md
         action: complete
 
 # 任务结束后（可选）
@@ -84,6 +84,6 @@ stages:
 #   - 对话中说"收集经验"或"reflecting collect"
 #   - 执行 reflecting collect {task-id}
 post_task:
-  - skill: skills/reflecting.md
+  - skill: skills/framework/reflecting.md
     sub_command: collect
     trigger: manual
