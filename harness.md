@@ -40,6 +40,41 @@
 
 这些不是硬门禁，而是注意力提醒。出现表中念头时，停下来执行纠正动作即可。
 
+## 产出物规范
+
+所有阶段的产出物必须遵循 `.harness/templates/` 中的模板格式，包含以下通用区块：
+
+### Summary for downstream
+每个产出物开头必须包含此区块，用于下游阶段快速了解上游重点。
+- 格式见各模板文件（如 templates/design-output.md）
+
+### Anti-Cherry-Pick Declaration
+测试报告和审查报告必须包含完整性声明。
+- 格式见 templates/test-report-output.md 和 templates/review-report-output.md
+
+### Decision Log
+设计文档和任务计划必须包含决策记录。
+- 格式见 templates/design-output.md
+
+## Context Ledger（上下文追踪）
+
+为避免重复读取文件浪费 token，维护一个简单的读取记录：
+
+### 记录位置
+`workspace/{task-id}/context-ledger.md`
+
+### 记录内容
+| File | Reason | Phase | Timestamp |
+|------|--------|-------|-----------|
+| task.md | 读取需求 | designing | 2026-07-16T10:00:00Z |
+| src/components/LoginForm.tsx | 查看现有实现 | implementing | 2026-07-16T10:30:00Z |
+
+### 使用规则
+- 每个 skill 执行前，检查 context-ledger.md 是否已读相关文件
+- 已读的文件不重复读取（除非需要最新内容）
+- 每次读取新文件后，追加记录到 context-ledger.md
+- harness.md 本身只需读一次，记录后不再重复读
+
 ## 技能执行留痕
 
 每个技能执行完后，必须写入 skill-log：

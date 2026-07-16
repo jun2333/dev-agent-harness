@@ -52,6 +52,29 @@ description: 技能描述和触发方式
 3. **项目规范**：`knowledge/standards/` 由 skill 的上下文加载指令主动读取
 4. **最佳实践**：`knowledge/patterns/` 通过 `_index.md` 语义匹配加载
 
+## 框架标准模板继承机制
+
+### 模板位置
+`.harness/skills/domain-templates/` 包含 5 个框架级标准 skill 模板：
+- designing.md
+- task-planning.md
+- implementing.md
+- testing.md
+- reviewing.md
+
+### 继承规则
+1. `knowledge-init skills` 命令基于框架模板生成项目特定 skill
+2. 生成的 skill **必须保留**框架模板中的通用规范：
+   - Summary for downstream 区块
+   - Anti-Cherry-Pick Declaration（测试报告和审查报告）
+   - Decision Log（设计文档和任务计划）
+3. 项目特定内容（角色、上下文加载指令、执行步骤、约束）基于 scan 产出填充
+4. 项目可通过 `knowledge/skills/{name}/templates/` 覆盖框架默认模板
+
+### 更新机制
+- 框架模板更新后，可通过 `knowledge-init skills` 重新生成项目 skill
+- 重新生成时保留项目特定内容，更新通用规范部分
+
 ## 知识库维护入口
 
 知识库的写入/修改**只能通过以下 skill**，避免随意污染：

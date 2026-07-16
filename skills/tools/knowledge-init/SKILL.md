@@ -70,15 +70,22 @@ description: 知识库初始化与维护。手动触发：用户说"初始化知
 1. 读取 skill-interface.md 获取接口规范
 2. 读取 knowledge/standards/ 了解项目编码规范和测试规范
 3. 读取 knowledge/patterns/ 了解项目的代码模式和架构惯例
-4. 为上述 6 个阶段技能各创建目录（knowledge/skills/{name}/）
-5. 为每个 skill 生成 SKILL.md，内容必须包含：
-   - **角色**：该阶段的职责定位
-   - **输入**：该阶段需要什么
-   - **上下文加载指令**：基于项目实际技术栈（从 scan 产出中获取），告诉 AI 该加载哪些文件、参考哪些 pattern
-   - **执行步骤**：贴合项目实际的执行流程
-   - **输出**：产出文件说明
-   - **约束**：基于项目规范的约束条件
-6. 为需要的 skill 生成 templates/ 产出模板
+4. **读取框架标准模板**：从 `.harness/skills/domain-templates/` 加载 5 个标准 skill 模板
+   - designing.md
+   - task-planning.md
+   - implementing.md
+   - testing.md
+   - reviewing.md
+5. 为上述 6 个阶段技能各创建目录（knowledge/skills/{name}/）
+6. 为每个 skill 生成 SKILL.md，**基于框架模板 + 项目特定内容**：
+   - **保留模板中的通用规范**（Summary for downstream、Anti-Cherry-Pick、Decision Log 等）
+   - **填充项目特定内容**：
+     - **角色**：基于项目技术栈调整（如"熟悉本项目的 Next.js + tRPC 体系"）
+     - **上下文加载指令**：基于项目实际技术栈（从 scan 产出中获取），告诉 AI 该加载哪些文件、参考哪些 pattern
+     - **执行步骤**：贴合项目实际的执行流程（如"运行 npx vitest"而非泛泛的"运行测试"）
+     - **约束**：引用项目特定的规范文件（如 knowledge/standards/code-style.md）
+     - **verification_commands**：根据项目技术栈生成具体的验证命令列表（如 `npm run test:unit`、`npx playwright test`、`npm run build`）
+7. 为需要的 skill 生成 templates/ 产出模板（如项目需要覆盖框架默认模板）
 
 ### 示例：scan 发现项目使用 tRPC + Prisma + Vitest
 则生成的技能中应包含：
@@ -86,6 +93,7 @@ description: 知识库初始化与维护。手动触发：用户说"初始化知
 - implementing 的上下文加载指令应提到"参考 patterns/trpc-router.md 创建新的 router"
 - testing 的执行步骤应提到"运行 npx vitest"而非泛泛的"运行测试"
 - reviewing 的约束应引用 standards/code-style.md 中的具体规范
+- **但所有 skill 都保留框架模板中的通用规范**（Summary、Anti-Cherry-Pick、Decision Log）
 
 ### 输出
 - knowledge/skills/{name}/SKILL.md
@@ -94,6 +102,7 @@ description: 知识库初始化与维护。手动触发：用户说"初始化知
 ### 约束
 - 所有内容必须基于 scan 产出，不能凭空捏造
 - 生成的 skill 必须符合 skill-interface.md 定义的接口规范
+- **必须保留框架模板中的通用规范**，不能遗漏
 - 生成的报告模板作为默认模板，项目可覆盖
 
 ## 子命令：optimize
