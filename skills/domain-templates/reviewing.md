@@ -63,6 +63,8 @@ description: 审查阶段技能模板（框架标准版）。knowledge-init 时�
   - 每条理由必须回答「AI 为什么自己验证不了」，不重复列 AI 已确认的问题
 - 审查完成后提示用户填写 human-review-feedback.md（模板见 templates/human-review-feedback.md），
   供 reflecting collect 收集人类反馈经验（反馈闭环）
+- 涉及前端变更时，视觉审查对照 designing 的「视觉反模式清单」（挤/乱/花/愣/散/虚），
+  抽查 implementing 是否执行了「渲染后视觉自查」；组件复用遵守 code-style 组件复用规范
 
 ## 产出物规范
 
