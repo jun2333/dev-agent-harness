@@ -57,6 +57,12 @@ description: 审查阶段技能模板（框架标准版）。knowledge-init 时�
 - 必须包含 Anti-Cherry-Pick Declaration
 - 问题必须按严重程度分类（Critical/Warning/Info）
 - 如果存在 Critical 问题，结论必须为"需要修改后重新审查"
+- **必须生成「建议人工复查清单」区块**（AI 无法自行验证、需要人类语义裁决的文件清单）：
+  - 文件集合 = 本任务 git diff 变更文件，只能从中选择
+  - 优先级：审查发现 Critical/Warning/P0/P1 所在文件 → 高；交互密集/服务端权限面/数据流变更 → 中；纯类型 → 低
+  - 每条理由必须回答「AI 为什么自己验证不了」，不重复列 AI 已确认的问题
+- 审查完成后提示用户填写 human-review-feedback.md（模板见 templates/human-review-feedback.md），
+  供 reflecting collect 收集人类反馈经验（反馈闭环）
 
 ## 产出物规范
 
@@ -70,3 +76,8 @@ description: 审查阶段技能模板（框架标准版）。knowledge-init 时�
 - 列出**全部**发现的 issues，按严重程度分类
 - 如果存在 Critical 问题，Recommendation 必须为"Reject"或"Conditional Approval with Fixes"
 - 不允许只汇报 Warning/Info 而隐藏 Critical 问题
+
+### 建议人工复查清单
+审查报告末尾必须包含此区块（AI 盲区清单，非 gate）：
+- 高优先必看：审查发现 Critical/Warning/P0/P1 所在文件、交互密集组件
+- 每条建议复查原因必须具体到「AI 验证不了什么」

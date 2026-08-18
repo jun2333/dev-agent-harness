@@ -42,6 +42,10 @@ description: 状态记录与断点恢复。自动触发：workflow 的 pre_task 
 2. 更新当前 stage、完成时间、产出文件列表
 3. 写回 checkpoint.json
 
+**关键约束：阶段推进更新 checkpoint 时，必须保留 `git_commit_before_task` 字段**——
+它是审核简报（tools/review-brief.js）计算任务真实 diff 的基线，被覆盖会导致简报退化为对 HEAD 的比较。
+建议写法：读取现有 checkpoint → 只更新需要变化的字段 → 整体写回（而不是重写整个对象丢字段）。
+
 ### checkpoint.json 格式
 ```json
 {

@@ -51,8 +51,11 @@ dsh/
 - [ ] 剩余验证：DSH 环境新建会话选「Harness 模式」冒烟装载；子代理 cwd 实测
 
 ### P1 — 证据链与双轨审查
-- [ ] verify 证据作为编排器 schema 校验项（verify_evidence 字段接入）
+- [x] **审核简报**（tools/review-brief.js）：git diff 变更表 + 各阶段 Summary + 验证证据 + 审查计数，机械合成一页（减人类审核心智负担）
+- [x] **建议人工复查清单**：review-report 新增 AI 盲区清单区块（文件集合机械锚定 + 优先级确定性信号 + 理由必须回答"AI 为何验证不了"）
+- [x] **人类反馈闭环**：human-review-feedback 模板 + reflecting collect 吸收人类意见进 lessons（source: human-review）
 - [ ] review 阶段双轨：实施与审查用不同 provider/model（workflow 支持 per-phase 覆盖），或 parallel 两个独立审查代理对比
+- [ ] 自适应门禁：门禁策略确定性化（任务开头选确认模式），LLM 只执行策略不决定策略
 
 ### P2 — 知识层三层架构
 - [ ] knowledge/ 文件保持真相源（git 分发不变）

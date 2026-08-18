@@ -58,28 +58,31 @@ description: 项目复盘 + 经验收集。阶段一自动触发：workflow 最�
 
 ### 确定性输入（从以下文件读取）
 - workspace/{task-id}/lessons-draft.md
+- workspace/{task-id}/human-review-feedback.md（如存在；人类审核反馈，见 templates/human-review-feedback.md）
 - 用户指定的编号（如"收集第 1、3 条"）
 
 ### 语义判断（基于输入推断）
 - 生成的 frontmatter 是否准确（tags、confidence 等）
 - 失效条件（invalidation_condition）是否具体可验证
 - 回源路径（source_refs）是否指向正确的源码文件
+- 人类反馈中「建议沉淀 = 是」的条目是否值得转为经验（基于问题的影响面和复用概率）
 
 ### 执行步骤
-1. 读取 lessons-draft.md
-2. 根据用户指定的编号，将对应条目标题加上 `✅` 标记
+1. 读取 lessons-draft.md 与 human-review-feedback.md（如存在）
+2. 根据用户指定的编号，将 lessons-draft 对应条目标题加上 `✅` 标记
 3. 筛选带 `✅` 的经验，生成 frontmatter（tags, confidence, created, use_count, source_task, status, invalidation_condition, source_refs）
-4. 写入 knowledge/lessons/ 目录
+4. 将 human-review-feedback.md 中「建议沉淀 = 是」的条目转为经验条目，frontmatter 增加 `source: human-review`，与步骤 3 的条目一起写入 knowledge/lessons/ 目录
 5. 更新 knowledge/_index.md（如需要）
-6. 清理已收集的草稿
+6. 清理已收集的草稿（lessons-draft.md 与已处理完的 human-review-feedback.md）
 
 ### 输出
-- knowledge/lessons/{id}-{title}.md（新增的经验文件）
+- knowledge/lessons/{id}-{title}.md（新增的经验文件，含 human-review 来源）
 
 ### 约束
-- 只收集用户勾选的经验
+- 只收集用户勾选的经验 + 人类反馈中明确「建议沉淀 = 是」的条目
 - 生成的文件必须符合 frontmatter 格式规范
 - 文件名使用 {id}-{title}.md 格式
+- 人类反馈「AI 审查是否遗漏 = 是」的条目同时是审查技能改进信号，记录到 skill-log 供 skill-evolution 使用
 
 ## 草稿格式
 
