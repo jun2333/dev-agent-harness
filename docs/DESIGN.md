@@ -33,16 +33,20 @@
 ┌─────────────────────────────────────────────────────────────┐
 │                    Harness 仓库（通用层）                     │
 │                                                             │
-│  ├── workflows/             # 工作流编排（阶段顺序、gate）    │
+│  ├── workflows/             # 工作流插件包（模板：阶段顺序、gate、sections、verify）│
+│  ├── workflow-schema.json   # 插件包 schema（格式校验）       │
 │  ├── context-rules/         # 上下文加载策略                  │
 │  ├── skill-interface.md     # Skill 接口规范（目录结构、格式）│
-│  └── skills/                # 通用层技能（四组）               │
+│  ├── tools/                 # 运行时工具：verify/workflow-lib/workflow-init │
+│  ├── hooks/                 # 门禁：gate-check（按插件包定义校验）│
+│  └── skills/                # 通用层技能（五组）               │
 │      ├── framework/         # 框架层：reflecting/state-checkpoint/hook-init │
 │      ├── skill-creation/    # 技能自举：skill-design/evolution/implement/test │
+│      ├── workflow-creation/ # 工作流自举：workflow-design/implement/test      │
 │      ├── tools/             # 工具类：knowledge-init/project-init/tech-audit │
 │      └── domain-templates/  # 框架模板：designing/.../reviewing            │
 │                                                             │
-│  ▲ 定义 workflow 编排逻辑 + skill 接口规范                   │
+│  ▲ 定义 workflow 模板 + skill 接口规范 + 门禁/验证工具        │
 │  ▲ 不含任何领域特定的业务 skill                               │
 └──────────────────────────┬──────────────────────────────────┘
                            │
@@ -59,32 +63,15 @@
 │  │   │   └── design-output.md                                │
 │  │   └── scripts/           （可选，该技能需要的脚本）        │
 │  ├── task-planning/                                         │
-│  │   ├── skill.md                                            │
-│  │   ├── templates/                                          │
-│  │   │   └── task-plan-output.md                             │
-│  │   └── scripts/                                            │
 │  ├── implementing/                                          │
-│  │   ├── skill.md                                            │
-│  │   ├── templates/                                          │
-│  │   └── scripts/                                            │
 │  ├── testing/                                               │
-│  │   ├── skill.md                                            │
-│  │   ├── templates/                                          │
-│  │   │   └── test-report-output.md                           │
-│  │   └── scripts/                                            │
 │  ├── reviewing/                                             │
-│  │   ├── skill.md                                            │
-│  │   ├── templates/                                          │
-│  │   │   └── review-report-output.md                         │
-│  │   └── scripts/                                            │
-│  ├── git-operations/                                          │
-│  │   ├── skill.md                                            │
-│  │   ├── templates/                                          │
-│  │   ── scripts/                                            │
-│  └── project-init/                                            │
-│      ├── skill.md                                            │
-│      ├── templates/                                          │
-│      └── scripts/                                            │
+│  ├── git-operations/                                        │
+│  └── project-init/                                          │
+│                                                             │
+│  knowledge/plugins/                                 │
+│  └── {name}/               ← 项目定制的工作流插件包（workflow-init 实例化）│
+│      └── workflow.yaml                                       │
 │                                                             │
 │  knowledge/                                        │
 │  ├── standards/           ← 项目编码规范、测试规范            │
@@ -93,7 +80,7 @@
 │  ├── archive/             ← 归档知识                          │
 │  └── _index.md                                              │
 │                                                             │
-│  ▲ 项目特定的 skill 实现 + 知识 + 规范                        │
+│  ▲ 项目特定的 skill 实现 + 工作流插件实例 + 知识 + 规范        │
 └─────────────────────────────────────────────────────────────┘
 ```
 
@@ -101,8 +88,8 @@
 
 | 层级 | 位置 | 内容 | 维护者 |
 |------|------|------|--------|
-| 通用层 | harness 仓库 | workflow 编排 + skill 接口规范 + 通用层技能（framework / skill-creation / tools / domain-templates 四组） | harness 维护者 |
-| 项目层 | `knowledge/` | 项目特定 skill 实现（含 git-operations）+ 项目规范/经验/模板 | 项目团队 + Agent（knowledge-init） |
+| 通用层 | harness 仓库 | 工作流插件包模板 + skill 接口规范 + 通用层技能（framework / skill-creation / workflow-creation / tools / domain-templates 五组）+ 门禁/验证工具 | harness 维护者 |
+| 项目层 | `knowledge/` | 项目特定 skill 实现（含 git-operations）+ **工作流插件实例（plugins/）** + 项目规范/经验/模板 | 项目团队 + Agent（knowledge-init） |
 
 ### Skill 接口规范
 
@@ -155,6 +142,7 @@
 |-------|--------|------|
 | knowledge-init | scan | 扫描项目生成 standards / patterns 初版 |
 | knowledge-init | skills | 生成业务 skill 目录和默认模板 |
+| knowledge-init | workflow-init | 工作流模板实例化：把通用工作流复制到 knowledge/plugins/ 并增强（init/sync/list，绑定项目命令池） |
 | knowledge-init | optimize | 整理索引、合并重复、归档过期条目 |
 | reflecting | 阶段一 | 生成经验草稿（lessons-draft.md），不直接写入知识库 |
 | reflecting | 阶段二 | 收集用户审核通过的经验，写入 lessons/ |
@@ -166,50 +154,45 @@
 ```
 dev-agent-harness/
 │
-├├── workflows/                     # 工作流定义（5 个 YAML）
-│   ├── feature.yaml               # 新功能开发流程
-│   ├── bugfix.yaml                # Bug 修复流程
-│   ├── refactor.yaml              # 重构流程
-│   ├── project-init.yaml          # 从零开始的项目初始化流程
-│   └── skill-creation.yaml        # 技能创建/重构流程
+├├── workflows/                     # 工作流插件包（6 个，目录式：workflow.yaml + check/）
+│   ├── feature/                   # 新功能开发流程（含 verify.checks: [unit, lint]）
+│   ├── bugfix/                    # Bug 修复流程
+│   ├── refactor/                  # 重构流程
+│   ├── project-init/              # 从零开始的项目初始化流程
+│   ├── skill-creation/            # 技能创建/重构流程（含 check/skill-check.js）
+│   └── workflow-creation/         # 工作流插件包创建流程（含 check/workflow-check.js）
 │
+├── workflow-schema.json           # 工作流插件包 schema（格式校验）
 ├── context-rules/                 # 上下文加载策略
 │   ├── file-discovery.md          # 如何定位相关文件
 │   └── loading-strategy.md        # 各阶段的上下文加载规则
 │
-├── skills/                        # 通用层技能（四组，按职责分层）
+├── skills/                        # 通用层技能（五组，按职责分层）
 │   ├── framework/                 # 框架层：reflecting / state-checkpoint / hook-init
 │   ├── skill-creation/            # 技能自举：skill-design / skill-evolution / skill-implement / skill-test
+│   ├── workflow-creation/         # 工作流自举：workflow-design / workflow-implement / workflow-test
 │   ├── tools/                     # 工具类：knowledge-init / project-init / tech-audit
 │   └── domain-templates/          # 框架模板：designing / task-planning / implementing / testing / reviewing
 │
 ├── skill-interface.md             # Skill 接口规范
-├── docs/                          # 设计文档（本文件 DESIGN.md）
+├── docs/                          # 设计文档（DESIGN.md + workflow-plugin-spec.md）
 │
 ├── templates/                     # 默认产出模板（可被项目层覆盖）
-│   ├── task-input.md              # 任务输入模板
-│   ├── design-output.md           # 技术设计输出模板
-│   ├── task-plan-output.md        # 任务计划输出模板
-│   ├── test-report-output.md      # 测试报告模板
-│   └── review-report-output.md    # 审查报告模板
 │
-├── tools/                         # 可执行工具：verify.js / skill-log.js
-├── hooks/                         # 门禁脚本：gate-check.js / check-verify.js / lib.js / install.js
+├── tools/                         # 运行时工具：verify.js / workflow-lib.js / workflow-init.js / skill-log.js / review-brief.js / simple-yaml.js
+├── hooks/                         # 门禁脚本：gate-check.js / check-verify.js / post-tool-log.js / lib.js / install.js
 ├── changelog/                     # 版本演进记录
-├── workspace/                     # 任务执行空间（产物目录）
-│   └── {task-id}/
-│       ├── task.md                # 任务描述（用户输入）
-│       ├── design.md              # 技术设计产出
-│       ├── task-plan.md           # 任务计划产出
-│       ├── changes.md             # 变更清单
-│       ├── test-report.md         # 测试报告
-│       ├── review-report.md       # 审查报告
-│       ├── lessons-draft.md       # 经验草稿（待用户审核）
-│       ├── skill-improvements-draft.md # 技能改进建议草稿（如有不足）
-│       ├── checkpoint.json        # 状态检查点（断点恢复用）
-│       └── execution-log.md       # 执行日志（对话历史）
-│
-└── harness.md                     # 主入口 prompt（启动 harness）
+└── workspace/                     # 任务执行空间（产物目录）
+    └── {task-id}/
+        ├── task.md                # 任务描述（用户输入）
+        ├── design.md              # 技术设计产出
+        ├── task-plan.md           # 任务计划产出
+        ├── changes.md             # 变更清单
+        ├── test-report.md         # 测试报告
+        ├── review-report.md       # 审查报告
+        ├── lessons-draft.md       # 经验草稿（待用户审核）
+        ├── checkpoint.json        # 状态检查点（断点恢复用）
+        └── verify/verification-result.json  # 验证证据（他证）
 ```
 
 ---
@@ -642,6 +625,35 @@ post_task:
 
 ---
 
+### 3.5 工作流插件机制（2026-08 演进）
+
+工作流从"单 YAML 定义"演进为**自包含插件包**，分两批落地：
+
+#### 第一批：插件包 + 运行时数据驱动
+
+```
+workflows/{name}/workflow.yaml     # 步骤定义（stages）+ 产出物要求（sections）+ 测试手段（verify.checks）
+workflows/{name}/check/            # 插件专属校验脚本（可选）
+```
+
+- **单一真相源**：产出物必含区块（sections/require_verify）从 gate-check 硬编码迁入 workflow.yaml——新工作流免改 harness 代码
+- **gate 数据驱动**：`gate-check.js` 按 `checkpoint.workflow` 加载插件包定义校验产出物；WorkBuddy 用 PreToolUse exit 2 硬阻断，Claude 等宿主用 PostToolUse（脚本双事件兼容）
+- **verify 手段两层**：插件包 `check/` 脚本（可编程校验）+ 项目命令池 key（`knowledge/verify.config.json` 的 commands 对象）——他证原则：命令来源只能是工作流声明 + 项目配置，LLM 不能自选
+- **文档/技能任务验证对象正确**：skill-creation 只跑 skill-check、workflow-creation 只跑 workflow-check，不再跑项目 vitest/lint
+- **创建插件的插件**：workflow-creation 工作流 + workflow-design/implement/test 技能（与 skill-creation 对称，自身闭环）
+
+#### 第二批：模板语义 + 项目实例化
+
+- **通用工作流 = 模板**：骨架（步骤/产出要求）通用，但测试命令、通过标准必须项目定制（"改代码用什么测试命令、怎么测算通过"由项目决定）
+- **项目层 `knowledge/plugins/`**（git 跟踪，与 skills/standards 同属项目层）：项目定制工作流插件包
+- **解析顺序**：`knowledge/plugins/{name}/`（项目优先）→ `.harness/workflows/{name}/`（通用兜底）；同名项目版覆盖
+- **workflow-init**（knowledge-init 子命令）：`init`（模板实例化 + 命令池强校验 + `--as` 改名 + 溯源注释）/ `sync`（只补齐未定制部分，定制保留报告）/ `list`
+- **check 脚本回归插件包**：校验脚本随工作流自包含（非通用脚本不放 tools/），新增 check 零 harness 代码改动
+
+详细规范见 `docs/workflow-plugin-spec.md`。
+
+---
+
 ### 4. Context Rules — 上下文加载策略
 
 这是让 AI 精准控制上下文的关键。
@@ -939,6 +951,10 @@ design.md
 | 状态管理 | checkpoint.json | 支持断点恢复和回滚，轻量可靠 |
 | 阶段门禁 | 用户确认 | 关键节点人工把关，最可靠的质检 |
 | 产出格式 | Markdown 模板 | 结构化、可追溯、可归档 |
+| 工作流形态 | 自包含插件包（workflow.yaml + check/） | 步骤/产出要求/测试手段内聚；新工作流免改 gate/verify 代码 |
+| 工作流分层 | 通用模板（.harness/workflows/）+ 项目实例（knowledge/plugins/） | 父类纯净、项目可定制（测试命令/通过标准项目决定） |
+| 校验脚本归属 | 随插件包 check/ | 工作流专属校验自包含，新增 check 零 harness 代码改动 |
+| 验证他证 | verify.js 执行 + verification-result.json 证据 | 命令只能来自工作流声明 + 项目命令池，LLM 不能自选；gate 对账 |
 
 ---
 
