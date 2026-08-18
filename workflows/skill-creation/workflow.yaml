@@ -1,6 +1,11 @@
 name: skill-creation
 description: 创建或重构 harness 技能的工作流（非代码任务）
 
+# 工作流验证手段（测试手段定义，见 docs/workflow-plugin-spec.md）
+# skill-check：校验技能包结构（SKILL.md/frontmatter/引用完整性），无需项目代码命令
+verify:
+  checks: [skill-check]
+
 # 任务开始前
 pre_task:
   - skill: skills/framework/state-checkpoint.md
@@ -11,6 +16,10 @@ stages:
     skill: skills/skill-creation/skill-design.md
     input: task.md
     output: design.md
+    sections:
+      - [## Summary for downstream]
+      - [## Decision Log]
+    require_verify: false
     gate: user_approval
     post_stage:
       - skill: skills/framework/state-checkpoint.md
@@ -21,6 +30,9 @@ stages:
     skill: skills/skill-creation/skill-implement.md
     input: [task.md, design.md]
     output: changes.md
+    sections:
+      - [## Summary for downstream]
+    require_verify: false
     gate: none
     post_stage:
       - skill: skills/framework/state-checkpoint.md
@@ -31,6 +43,10 @@ stages:
     skill: skills/skill-creation/skill-test.md
     input: [task.md, design.md, changes.md]
     output: test-report.md
+    sections:
+      - [## Summary for downstream]
+      - [## 完整性声明, ## Anti-Cherry-Pick Declaration]
+    require_verify: true
     gate: user_approval
     on_fail: implementing
     post_stage:
@@ -43,6 +59,8 @@ stages:
     sub_command: reflect
     input: [task.md, design.md, changes.md, test-report.md, execution-log.md]
     output: lessons-draft.md
+    sections: []
+    require_verify: false
     post_stage:
       - skill: skills/framework/state-checkpoint.md
         action: complete

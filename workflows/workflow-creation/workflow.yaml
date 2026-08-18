@@ -1,9 +1,10 @@
-name: bugfix
-description: Bug 修复流程
+name: workflow-creation
+description: 创建或重构 harness 工作流插件包的工作流（创建插件的插件）。按 workflow-plugin-spec 规范产出自包含插件包（workflow.yaml + check 脚本 + templates）。
 
 # 工作流验证手段（测试手段定义，见 docs/workflow-plugin-spec.md）
+# workflow-check：校验插件包合法性（workflow.yaml 结构/sections/gate/verify 手段可解析）
 verify:
-  checks: [unit, lint]
+  checks: [workflow-check]
 
 # 任务开始前
 pre_task:
@@ -11,10 +12,10 @@ pre_task:
     action: init
 
 stages:
-  - name: task-planning
-    skill: knowledge/skills/task-planning/skill.md
+  - name: designing
+    skill: skills/workflow-creation/skill-design.md
     input: task.md
-    output: task-plan.md
+    output: design.md
     sections:
       - [## Summary for downstream]
       - [## Decision Log]
@@ -26,8 +27,8 @@ stages:
       - action: skill-log
 
   - name: implementing
-    skill: knowledge/skills/implementing/skill.md
-    input: [task.md, task-plan.md]
+    skill: skills/workflow-creation/skill-implement.md
+    input: [task.md, design.md]
     output: changes.md
     sections:
       - [## Summary for downstream]
@@ -39,8 +40,8 @@ stages:
       - action: skill-log
 
   - name: testing
-    skill: knowledge/skills/testing/skill.md
-    input: [task.md, task-plan.md, changes.md]
+    skill: skills/workflow-creation/skill-test.md
+    input: [task.md, design.md, changes.md]
     output: test-report.md
     sections:
       - [## Summary for downstream]
@@ -53,41 +54,13 @@ stages:
         action: save
       - action: skill-log
 
-  - name: reviewing
-    skill: knowledge/skills/reviewing/skill.md
-    input: [changes.md, test-report.md]
-    output: review-report.md
-    sections:
-      - [## Summary for downstream]
-      - [## Anti-Cherry-Pick Declaration]
-    require_verify: true
-    gate: user_approval
-    on_fail: implementing
-    post_stage:
-      - skill: skills/framework/state-checkpoint.md
-        action: save
-      - action: skill-log
-
   - name: reflecting
     skill: skills/framework/reflecting.md
     sub_command: reflect
-    input: [task.md, task-plan.md, test-report.md, review-report.md, execution-log.md]
+    input: [task.md, design.md, changes.md, test-report.md, execution-log.md]
     output: lessons-draft.md
     sections: []
     require_verify: false
-    post_stage:
-      - skill: skills/framework/state-checkpoint.md
-        action: save
-
-  - name: git-operations
-    skill: knowledge/skills/git-operations/skill.md
-    sub_command: commit
-    input: [changes.md, review-report.md]
-    output: changes.md
-    sections: []
-    require_verify: false
-    gate: user_approval
-    optional: true
     post_stage:
       - skill: skills/framework/state-checkpoint.md
         action: complete

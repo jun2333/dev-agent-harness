@@ -32,6 +32,7 @@
 const { execSync } = require('child_process');
 const fs = require('fs');
 const path = require('path');
+const { loadWorkflowDefinition, resolveVerifyCommands } = require('./workflow-lib.js');
 
 const CONFIG_NAME = 'verify.config.json';
 const CONFIG_REL = path.join('knowledge', CONFIG_NAME);
@@ -52,7 +53,11 @@ function findVerifyConfig(startDir) {
   }
 }
 
-/** 解析并校验配置 */
+/**
+ * 解析并校验配置。支持：
+ *   v1：commands 为数组（默认命令集）
+ *   v2：commands 为对象（命令池 key → 命令，配合工作流 verify.checks 使用）
+ */
 function readConfig(configPath) {
   let raw;
   try {
@@ -60,16 +65,46 @@ function readConfig(configPath) {
   } catch (e) {
     throw new Error(`验证配置解析失败：${configPath}（${e.message}）`);
   }
-  if (!raw || !Array.isArray(raw.commands) || raw.commands.length === 0) {
+  const cmds = raw && raw.commands;
+  const empty = Array.isArray(cmds)
+    ? cmds.length === 0
+    : typeof cmds === 'object'
+      ? Object.keys(cmds).length === 0
+      : true;
+  if (!raw || empty) {
     throw new Error(
-      `验证配置格式错误：${configPath} 必须包含非空 commands 数组（schema_version: ${CONFIG_SCHEMA}）`
+      `验证配置格式错误：${configPath} 必须包含非空 commands（v1 数组或 v2 命令池对象，schema_version: ${CONFIG_SCHEMA} 或 verify.config.v2）`
     );
   }
   return raw;
 }
 
+/** 解析最终执行命令数组：优先 workflow verify 声明，否则 v1 数组默认命令集 */
+function resolveCommands(config, workflowName, rootDir) {
+  if (workflowName) {
+    const wfDef = loadWorkflowDefinition(rootDir, workflowName);
+    if (!wfDef) {
+      throw new Error(
+        `未找到工作流插件包定义：.harness/workflows/${workflowName}/workflow.yaml（verify --workflow 需要它声明 verify.checks）`
+      );
+    }
+    const cmds = resolveVerifyCommands(rootDir, wfDef);
+    if (!cmds || cmds.length === 0) {
+      throw new Error(
+        `工作流 ${workflowName} 未声明 verify.checks（无需运行 verify），或 checks 为空`
+      );
+    }
+    return cmds;
+  }
+  // 无 --workflow：v1 兼容（commands 数组作为默认命令集）；v2 对象则必须用 --workflow
+  if (Array.isArray(config.commands)) return config.commands;
+  throw new Error(
+    'verify.config.json 使用 v2 命令池（commands 为对象），必须通过 --workflow <name> 指定工作流来解析 verify.checks'
+  );
+}
+
 /** 执行全部验证命令，产出结构化证据 */
-function runVerification(config, configPath, rootDir, outputDir, reportPath) {
+function runVerification(config, configPath, rootDir, outputDir, reportPath, commandsOverride) {
   const results = {
     schema_version: RESULT_SCHEMA,
     generated_at: new Date().toISOString(),
@@ -85,9 +120,13 @@ function runVerification(config, configPath, rootDir, outputDir, reportPath) {
   fs.mkdirSync(path.dirname(reportPath), { recursive: true });
 
   const timeoutMs = config.timeout_ms || 300000;
+  // 兼容测试：不传 commandsOverride 时用 config.commands（v1 数组）
+  const cmds = commandsOverride || (Array.isArray(config.commands) ? config.commands : []);
 
-  for (const cmd of config.commands) {
-    const logFile = path.join(outputDir, `${String(cmd).replace(/\s+/g, '-')}.log`);
+  for (const cmd of cmds) {
+    // 日志文件名：命令的非字母数字字符转 '-'（避免绝对路径/空格破坏文件名）
+    const logName = String(cmd).replace(/[^a-zA-Z0-9._-]+/g, '-').replace(/^-+|-+$/g, '');
+    const logFile = path.join(outputDir, `${logName || 'verify-cmd'}.log`);
     let exitCode = 0;
     let stdout = '';
     let stderr = '';
@@ -159,7 +198,7 @@ function getArg(name) {
 if (subcommand !== 'run') {
   console.error('Usage: node verify.js <run> ...');
   console.error('Subcommands:');
-  console.error('  run  - 从 knowledge/verify.config.json 读取命令并执行验证');
+  console.error('  run  - 按工作流 verify.checks 解析命令并执行验证（--workflow <name>），无则用配置默认命令集');
   process.exit(1);
 }
 
@@ -175,9 +214,10 @@ if (getArg('commands')) {
 const outputDirArg = getArg('output-dir');
 const reportPathArg = getArg('report');
 const rootArg = getArg('root');
+const workflowArg = getArg('workflow');
 
 if (!outputDirArg || !reportPathArg) {
-  console.error('Usage: node verify.js run --output-dir=<dir> --report=<path> [--root=<dir>]');
+  console.error('Usage: node verify.js run --output-dir=<dir> --report=<path> [--root=<dir>] [--workflow=<name>]');
   process.exit(1);
 }
 
@@ -199,7 +239,8 @@ try {
     ? reportPathArg
     : path.join(rootDir, reportPathArg);
 
-  const results = runVerification(config, configPath, rootDir, outputDir, reportPath);
+  const cmds = resolveCommands(config, workflowArg, rootDir);
+  const results = runVerification(config, configPath, rootDir, outputDir, reportPath, cmds);
 
   console.log(`Verification completed: ${results.overall_status}`);
   console.log(`Commands run (from ${results.config_source}): ${results.commands.length}`);

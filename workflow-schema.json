@@ -1,0 +1,55 @@
+{
+  "schema_version": "workflow-plugin.v1",
+  "description": "工作流插件包 schema。校验 .harness/workflows/{name}/workflow.yaml（及项目层 harness-plugins/{name}/workflow.yaml）的格式合法性。运行时（gate-check/verify.js）只消费通过本 schema 校验的定义。",
+  "workflow": {
+    "name": { "type": "string", "required": true, "pattern": "^[a-z0-9][a-z0-9-]*$", "note": "kebab-case，与插件包目录名一致" },
+    "description": { "type": "string", "required": true },
+    "verify": {
+      "type": "object",
+      "required": false,
+      "properties": {
+        "checks": { "type": "array", "items": { "type": "string" }, "note": "测试手段：内置 check（skill-check 等）或命令池 key（unit/lint/e2e，从 knowledge/verify.config.json 解析）" }
+      }
+    },
+    "stages": {
+      "type": "array",
+      "required": true,
+      "items": {
+        "type": "object",
+        "required": ["name", "skill", "output"],
+        "properties": {
+          "name": { "type": "string", "required": true, "note": "阶段名，工作流内唯一" },
+          "skill": { "type": "string", "required": true, "note": "阶段加载的 skill 路径" },
+          "sub_command": { "type": "string", "required": false },
+          "input": { "type": ["string", "array"], "required": false },
+          "output": { "type": ["string", "array"], "required": true, "note": "阶段产出物文件" },
+          "sections": {
+            "type": "array",
+            "required": false,
+            "note": "产出物必含区块：二维数组，外层每组内任一满足（gate-check 校验用）",
+            "items": { "type": "array", "items": { "type": "string" } }
+          },
+          "require_verify": { "type": "boolean", "required": false, "note": "testing/reviewing 阶段是否必须 verify 证据" },
+          "gate": { "type": "string", "required": false, "enum": ["user_approval", "none"], "note": "user_approval=产出后停等人工确认" },
+          "on_fail": { "type": "string", "required": false, "note": "阶段失败回退到的阶段名" },
+          "optional": { "type": "boolean", "required": false },
+          "permission": { "type": "string", "required": false, "enum": ["read-only", "workspace-write"], "note": "DSH 沙箱权限（通用层承载）" },
+          "tools": { "type": "string", "required": false, "note": "阶段可用工具集（DSH 消费）" },
+          "post_stage": {
+            "type": "array",
+            "required": false,
+            "items": {
+              "type": "object",
+              "properties": {
+                "skill": { "type": "string" },
+                "action": { "type": "string" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "pre_task": { "type": "array", "required": false },
+    "post_task": { "type": "array", "required": false }
+  }
+}

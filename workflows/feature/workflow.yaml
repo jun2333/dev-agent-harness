@@ -1,6 +1,11 @@
 name: feature
 description: 新功能开发流程
 
+# 工作流验证手段（测试手段定义，见 docs/workflow-plugin-spec.md）
+# checks: 内置 check（skill-check 等）或命令池 key（unit/lint/e2e，从 knowledge/verify.config.json 解析）
+verify:
+  checks: [unit, lint]
+
 # 任务开始前
 pre_task:
   - skill: skills/framework/state-checkpoint.md
@@ -11,6 +16,10 @@ stages:
     skill: knowledge/skills/designing/skill.md
     input: task.md
     output: design.md
+    sections:
+      - [## Summary for downstream]
+      - [## Decision Log]
+    require_verify: false
     gate: user_approval
     post_stage:
       - skill: skills/framework/state-checkpoint.md
@@ -21,6 +30,10 @@ stages:
     skill: knowledge/skills/task-planning/skill.md
     input: [task.md, design.md]
     output: task-plan.md
+    sections:
+      - [## Summary for downstream]
+      - [## Decision Log]
+    require_verify: false
     gate: user_approval
     post_stage:
       - skill: skills/framework/state-checkpoint.md
@@ -31,6 +44,9 @@ stages:
     skill: knowledge/skills/implementing/skill.md
     input: [task.md, design.md, task-plan.md]
     output: changes.md
+    sections:
+      - [## Summary for downstream]
+    require_verify: false
     gate: none
     post_stage:
       - skill: skills/framework/state-checkpoint.md
@@ -41,6 +57,10 @@ stages:
     skill: knowledge/skills/testing/skill.md
     input: [task.md, task-plan.md, changes.md]
     output: test-report.md
+    sections:
+      - [## Summary for downstream]
+      - [## 完整性声明, ## Anti-Cherry-Pick Declaration]
+    require_verify: true
     gate: user_approval
     on_fail: implementing
     post_stage:
@@ -52,6 +72,10 @@ stages:
     skill: knowledge/skills/reviewing/skill.md
     input: [design.md, changes.md, test-report.md]
     output: review-report.md
+    sections:
+      - [## Summary for downstream]
+      - [## Anti-Cherry-Pick Declaration]
+    require_verify: true
     gate: user_approval
     on_fail: implementing
     post_stage:
@@ -64,6 +88,8 @@ stages:
     sub_command: reflect
     input: [task.md, design.md, task-plan.md, test-report.md, review-report.md, execution-log.md]
     output: lessons-draft.md
+    sections: []
+    require_verify: false
     post_stage:
       - skill: skills/framework/state-checkpoint.md
         action: save
@@ -73,6 +99,8 @@ stages:
     sub_command: commit
     input: [changes.md, review-report.md]
     output: changes.md
+    sections: []
+    require_verify: false
     gate: user_approval
     optional: true
     post_stage:

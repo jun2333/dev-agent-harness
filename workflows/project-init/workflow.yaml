@@ -1,6 +1,11 @@
 name: project-init
 description: 从零开始的项目初始化流程（技术选型 + 标准定制 + 脚手架搭建）
 
+# 工作流验证手段（测试手段定义，见 docs/workflow-plugin-spec.md）
+# 项目初始化无代码验证阶段，checks 留空
+verify:
+  checks: []
+
 # 任务开始前
 pre_task:
   - skill: skills/framework/state-checkpoint.md
@@ -12,6 +17,8 @@ stages:
     sub_command: full
     input: task.md
     output: [tech-selection.md, project-standards.md]
+    sections: []
+    require_verify: false
     gate: user_approval
     post_stage:
       - skill: skills/framework/state-checkpoint.md
@@ -23,6 +30,8 @@ stages:
     sub_command: reflect
     input: [task.md, tech-selection.md, project-standards.md, execution-log.md]
     output: lessons-draft.md
+    sections: []
+    require_verify: false
     post_stage:
       - skill: skills/framework/state-checkpoint.md
         action: save
@@ -32,6 +41,8 @@ stages:
     sub_command: commit
     input: [tech-selection.md, project-standards.md]
     output: changes.md
+    sections: []
+    require_verify: false
     gate: user_approval
     optional: true
     post_stage:
