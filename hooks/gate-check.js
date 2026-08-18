@@ -6,8 +6,11 @@
  * 注册：PostToolUse 匹配 Write|Edit（写产出物后立即校验）+ Stop（任务收尾终检）
  * 校验：
  *   1. 当前阶段产出物存在（checkpoint.json 的 current_stage 对应的 output 文件）
- *   2. 产出物包含模板必含区块（## Summary for downstream）
- *   3. testing / reviewing 阶段必须存在 verify 证据（verification-result.json 且 passed）
+ *   2. 产出物包含该阶段必含区块（Summary / Decision Log / Anti-Cherry-Pick，按阶段）
+ *   3. testing / reviewing 阶段必须存在 verify 证据（verification-result.json 且 passed），
+ *      且证据命令必须与项目配置 knowledge/verify.config.json 对账（他证）：
+ *      - 证据中不能有配置外的命令（禁止自选命令 = 禁止自证）
+ *      - 配置中所有命令必须全量出现在证据中（禁止只跑部分）
  * 失败：PostToolUse 时 exit 2 + stderr 列出缺失项，CLI 拦截并反馈给 LLM 补齐；
  *       Stop 时只发提醒不阻塞（避免用户中途退出会话被卡住）
  * 容错：不在 harness 任务中（无 checkpoint）→ exit 0，不打扰普通开发；
@@ -18,17 +21,46 @@ const fs = require('fs');
 const path = require('path');
 const { readStdin, findHarnessRoot, emitReminder, exitBlock, exitOk } = require('./lib.js');
 
-// 阶段 -> 产出物文件（与 workflows/*.yaml 的 output 对应）
-const STAGE_OUTPUTS = {
-  designing: 'design.md',
-  'task-planning': 'task-plan.md',
-  implementing: 'changes.md',
-  testing: 'test-report.md',
-  reviewing: 'review-report.md',
-  reflecting: 'lessons-draft.md',
+// 阶段 -> 产出物 + 必含区块（sections 内每个数组为「任一即可」）+ 是否要求 verify 证据
+// 与 workflows/*.yaml 的 output 对应；与 dsh/stage-schema.json 保持同步
+const STAGE_REQUIREMENTS = {
+  designing: {
+    output: 'design.md',
+    sections: [['## Summary for downstream'], ['## Decision Log']],
+    require_verify: false,
+  },
+  'task-planning': {
+    output: 'task-plan.md',
+    sections: [['## Summary for downstream'], ['## Decision Log']],
+    require_verify: false,
+  },
+  implementing: {
+    output: 'changes.md',
+    sections: [['## Summary for downstream']],
+    require_verify: false,
+  },
+  testing: {
+    output: 'test-report.md',
+    sections: [
+      ['## Summary for downstream'],
+      ['## 完整性声明', '## Anti-Cherry-Pick Declaration'],
+    ],
+    require_verify: true,
+  },
+  reviewing: {
+    output: 'review-report.md',
+    sections: [['## Summary for downstream'], ['## Anti-Cherry-Pick Declaration']],
+    require_verify: true,
+  },
+  reflecting: {
+    output: 'lessons-draft.md',
+    sections: [],
+    require_verify: false,
+  },
 };
 
-const REQUIRED_SECTIONS = ['## Summary for downstream'];
+// 项目验证配置（他证证据的唯一合法来源）
+const VERIFY_CONFIG_REL = path.join('knowledge', 'verify.config.json');
 
 function readJson(file) {
   try {
@@ -67,8 +99,9 @@ function latestCheckpoint(root) {
 
 function checkStage(root, taskDir, checkpoint) {
   const stage = checkpoint.current_stage;
-  const output = checkpoint.stage_outputs && checkpoint.stage_outputs[stage] || STAGE_OUTPUTS[stage];
-  if (!output) return []; // 未知阶段（如 git-operations / 复盘），不做硬校验
+  const req = STAGE_REQUIREMENTS[stage];
+  const output = (checkpoint.stage_outputs && checkpoint.stage_outputs[stage]) || (req && req.output);
+  if (!req || !output) return []; // 未知阶段（如 git-operations / 复盘），不做硬校验
 
   const failures = [];
   const outputPath = path.join(root, '.harness', 'workspace', taskDir, output);
@@ -79,24 +112,70 @@ function checkStage(root, taskDir, checkpoint) {
   }
 
   const content = fs.readFileSync(outputPath, 'utf8');
-  for (const section of REQUIRED_SECTIONS) {
-    if (!content.includes(section)) {
-      failures.push(`产出物缺少必含区块：${section}（${path.join('workspace', taskDir, output)}）`);
+  for (const group of req.sections) {
+    if (!group.some(sec => content.includes(sec))) {
+      failures.push(
+        `产出物缺少必含区块（${path.join('workspace', taskDir, output)}）：${group.join(' 或 ')}`
+      );
     }
   }
 
-  // testing / reviewing 阶段必须有 verify 证据链
-  if (stage === 'testing' || stage === 'reviewing') {
-    const verifyReport = path.join(root, '.harness', 'workspace', taskDir, 'verify', 'verification-result.json');
-    const verifyData = readJson(verifyReport);
-    if (!verifyData) {
-      failures.push(
-        `缺少 verify 证据：${path.join('workspace', taskDir, 'verify', 'verification-result.json')} 不存在。` +
-        '测试必须通过 `node .harness/tools/verify.js run` 执行，结果才会落盘为证据。'
-      );
-    } else if (verifyData.overall_status !== 'passed') {
-      failures.push(`verify 证据显示未通过：overall_status = ${verifyData.overall_status}`);
-    }
+  // testing / reviewing 阶段必须有 verify 证据链（他证）
+  if (req.require_verify) {
+    failures.push(...checkVerifyEvidence(root, taskDir));
+  }
+
+  return failures;
+}
+
+/** verify 证据校验：报告存在 + passed + 命令与项目配置对账（他证） */
+function checkVerifyEvidence(root, taskDir) {
+  const failures = [];
+  const verifyReport = path.join(root, '.harness', 'workspace', taskDir, 'verify', 'verification-result.json');
+  const verifyData = readJson(verifyReport);
+  if (!verifyData) {
+    failures.push(
+      `缺少 verify 证据：${path.join('workspace', taskDir, 'verify', 'verification-result.json')} 不存在。` +
+        '测试必须通过 `node .harness/tools/verify.js run` 执行（命令来自项目配置 knowledge/verify.config.json），结果才会落盘为证据。'
+    );
+    return failures;
+  }
+  if (verifyData.overall_status !== 'passed') {
+    failures.push(`verify 证据显示未通过：overall_status = ${verifyData.overall_status}`);
+  }
+
+  // 证据对账：报告命令必须来自项目配置，且全量执行
+  const config = readJson(path.join(root, VERIFY_CONFIG_REL));
+  if (!config || !Array.isArray(config.commands) || config.commands.length === 0) {
+    failures.push(
+      `缺少项目验证配置：${VERIFY_CONFIG_REL} 不存在或 commands 为空。` +
+        '验证命令是项目拥有的，请先运行 knowledge-init 生成该配置，不允许 LLM 自选命令。'
+    );
+    return failures;
+  }
+
+  const configCommands = config.commands.map(String);
+  const reportCommands = (verifyData.commands || [])
+    .map(c => (typeof c === 'string' ? c : c && c.command))
+    .filter(Boolean);
+
+  const ran = new Set(reportCommands);
+  const notRun = configCommands.filter(c => !ran.has(c));
+  if (notRun.length > 0) {
+    failures.push(
+      `verify 证据未覆盖项目配置中的命令：${notRun.join(', ')}（配置命令必须全量执行，不允许只跑部分）`
+    );
+  }
+  const extra = reportCommands.filter(c => !configCommands.includes(c));
+  if (extra.length > 0) {
+    failures.push(
+      `verify 证据包含配置外的命令：${extra.join(', ')}（命令只能来自项目配置，如需新增请修改 ${VERIFY_CONFIG_REL}）`
+    );
+  }
+  if (!verifyData.config_source) {
+    failures.push(
+      'verify 证据缺少 config_source 字段：请使用新版 `node .harness/tools/verify.js run`（命令来自项目配置）重新生成证据。'
+    );
   }
 
   return failures;
@@ -140,7 +219,8 @@ function main() {
       );
     } else {
       exitBlock(
-        `[harness gate] 阶段「${checkpoint.current_stage}」校验未通过：\n${detail}\n请补齐上述证据后再继续。`
+        `[harness gate] 阶段「${checkpoint.current_stage}」校验未通过：\n${detail}\n` +
+          '请重做该阶段的产出工作（补齐证据/区块后重新验证），而不是只修补报告文件。'
       );
     }
   }

@@ -31,13 +31,14 @@ description: 测试阶段技能模板（框架标准版）。knowledge-init 时�
    ```
 
 1. 检查测试基础设施（根据项目技术栈）
-2. 运行验证命令（使用 CLI 工具）：
+2. 运行验证命令（使用 CLI 工具，命令从项目配置读取，不允许自选）：
    ```bash
    node .harness/tools/verify.js run \
-     --commands "{从本 skill 的 verification_commands 字段读取}" \
-     --output-dir workspace/{task-id}/test-results \
-     --report workspace/{task-id}/verification-result.json
+     --output-dir .harness/workspace/{task-id}/test-results \
+     --report .harness/workspace/{task-id}/verify/verification-result.json
    ```
+   > 验证命令由项目配置 `knowledge/verify.config.json` 提供（knowledge-init 生成），
+   > verify.js 自动读取；传 `--commands` 会被拒绝——命令是项目拥有的，不是 LLM 自选的（他证原则）。
 3. 读取 verification-result.json，获取每个命令的 exit_code 和 log_path
 4. 检查变更文件是否有对应测试覆盖
 5. 如缺少测试，补充关键路径的测试用例
@@ -53,12 +54,17 @@ description: 测试阶段技能模板（框架标准版）。knowledge-init 时�
      --confidence {置信度}
    ```
 
-## verification_commands
-（此字段由 knowledge-init 根据项目技术栈生成）
-```yaml
-- npm run test:unit
-- npm run build
+## 验证命令配置
+
+（`knowledge/verify.config.json` 由 knowledge-init 根据项目技术栈生成，示例）
+```json
+{
+  "schema_version": "verify.config.v1",
+  "commands": ["npm run test:unit", "npm run build"],
+  "timeout_ms": 300000
+}
 ```
+如需新增验证命令（如针对本任务的专项测试），编辑该配置文件，不要在命令行自选命令。
 
 ## 输出
 生成 workspace/{task-id}/test-report.md

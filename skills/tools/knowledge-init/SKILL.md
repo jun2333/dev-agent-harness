@@ -84,8 +84,12 @@ description: 知识库初始化与维护。手动触发：用户说"初始化知
      - **上下文加载指令**：基于项目实际技术栈（从 scan 产出中获取），告诉 AI 该加载哪些文件、参考哪些 pattern
      - **执行步骤**：贴合项目实际的执行流程（如"运行 npx vitest"而非泛泛的"运行测试"）
      - **约束**：引用项目特定的规范文件（如 knowledge/standards/code-style.md）
-     - **verification_commands**：根据项目技术栈生成具体的验证命令列表（如 `npm run test:unit`、`npx playwright test`、`npm run build`）
+     - **验证命令引用**：testing skill 的执行步骤引用项目验证配置 `knowledge/verify.config.json`（`verify.js run` 自动读取命令），LLM 不允许通过 `--commands` 自选命令（他证原则）
 7. 为需要的 skill 生成 templates/ 产出模板（如项目需要覆盖框架默认模板）
+8. **生成项目验证配置 `knowledge/verify.config.json`**（验证命令项目化，他证证据的唯一合法来源）：
+   - 根据项目技术栈生成具体的验证命令列表（如 `npm run test:unit`、`npx playwright test`、`npm run build`）
+   - 格式：`{"schema_version": "verify.config.v1", "commands": [...], "timeout_ms": 300000}`
+   - 配置由项目拥有、随项目版本管理；调整验证命令改配置，不改命令行
 
 ### 示例：scan 发现项目使用 tRPC + Prisma + Vitest
 则生成的技能中应包含：
@@ -98,6 +102,7 @@ description: 知识库初始化与维护。手动触发：用户说"初始化知
 ### 输出
 - knowledge/skills/{name}/SKILL.md
 - knowledge/skills/{name}/templates/*.md（如需要）
+- knowledge/verify.config.json（项目验证配置，verify.js 据此执行验证命令）
 
 ### 约束
 - 所有内容必须基于 scan 产出，不能凭空捏造

@@ -27,8 +27,8 @@ function main() {
   emitReminder(
     'PostToolUse',
     `[harness] 检测到直接执行验证命令：${command}\n` +
-      '测试/构建结果只有通过 verify 通道（`node .harness/tools/verify.js run --commands=...`）执行才会写入 ' +
-      'verification-result.json，阶段 gate 校验只认这份证据。请改用 verify 工具重新执行。'
+      '测试/构建结果只有通过 verify 通道（`node .harness/tools/verify.js run`，命令来自项目配置 ' +
+      'knowledge/verify.config.json）执行才会写入 verification-result.json，阶段 gate 校验只认这份证据。请改用 verify 工具重新执行。'
   );
   exitOk();
 }

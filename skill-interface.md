@@ -143,3 +143,21 @@ description: 技能描述和触发方式
 - 语义判断必须标注依据（基于哪些确定性输入推断）
 - 不要把语义判断伪装成确定性事实（例如"测试通过了"必须附带实际运行的命令和输出）
 - 不要把确定性工作交给 LLM 判断（例如文件是否存在、git hash 是什么，必须从实际状态读取）
+
+## 验证命令项目化（verify.config.json）
+
+验证命令（测试/构建/lint）是**确定性证据的唯一合法来源**，必须由项目拥有，不允许 LLM 自选：
+
+- 配置位置：`knowledge/verify.config.json`（项目层，随项目版本管理，由 `knowledge-init skills` 生成）
+- 格式：
+  ```json
+  {
+    "schema_version": "verify.config.v1",
+    "commands": ["npm run test:unit", "npm run build"],
+    "timeout_ms": 300000
+  }
+  ```
+- 执行入口：`node .harness/tools/verify.js run` 自动从配置读取命令；传 `--commands` 会被拒绝
+- gate 校验：testing/reviewing 阶段的证据（verification-result.json）必须与配置**对账**——
+  配置中的命令必须全量执行，证据中不允许出现配置外的命令
+- 需要新增任务专项验证命令时，编辑配置文件（项目拥有的变更），而不是在命令行自选
