@@ -35,11 +35,15 @@ const REL = p => path.relative(process.cwd(), p) || p;
 
 // 同一套 hook 适配所有宿主：事件名/matcher/脚本均与 Claude Code 同构。
 // user 级用绝对路径（跨项目可用），project 级用相对路径（harness 作为 submodule 内嵌项目）。
-function buildJsonHooks(scope) {
+// gate-check 挂载点按宿主区分（gateEvent）：
+//   'PreToolUse'  - workbuddy/codebuddy：PostToolUse exit 2 不阻断（工具已执行完，无法阻止），
+//                   仅 PreToolUse exit 2 能真正阻止写入（2026-08-18 实测+官方契约）。
+//   'PostToolUse' - claude/qoder：契约同 Claude Code，PostToolUse exit 2 阻断，校验落盘结果更准。
+function buildJsonHooks(scope, gateEvent) {
   const cmd = script => scope === 'user'
     ? `node ${path.join(HOOKS_DIR, script)}`
     : `node ${REL(path.join(HOOKS_DIR, script))}`;
-  return {
+  const hooks = {
     PostToolUse: [
       {
         matcher: 'Bash|Write|Edit|apply_patch',
@@ -50,29 +54,32 @@ function buildJsonHooks(scope) {
         hooks: [{ type: 'command', command: cmd('check-verify.js'), name: 'harness-check-verify', timeout: 10, statusMessage: 'harness: 检查验证命令' }],
       },
     ],
-    // gate-check 挂 PreToolUse：WorkBuddy/CodeBuddy 契约中 PostToolUse exit 2 不阻断
-    // （工具已执行完，无法阻止），仅 PreToolUse exit 2 能真正阻止写入（2026-08-18 实测）。
-    PreToolUse: [
-      {
-        matcher: 'Write|Edit',
-        hooks: [{ type: 'command', command: cmd('gate-check.js'), name: 'harness-gate-check', timeout: 10, statusMessage: 'harness: 阶段产出校验' }],
-      },
-    ],
     Stop: [
       {
         hooks: [{ type: 'command', command: cmd('gate-check.js'), name: 'harness-gate-check-stop', timeout: 10, statusMessage: 'harness: 收尾校验' }],
       },
     ],
   };
+  const gateGroup = {
+    matcher: 'Write|Edit',
+    hooks: [{ type: 'command', command: cmd('gate-check.js'), name: 'harness-gate-check', timeout: 10, statusMessage: 'harness: 阶段产出校验' }],
+  };
+  if (gateEvent === 'PreToolUse') {
+    hooks.PreToolUse = [gateGroup];
+  } else {
+    hooks.PostToolUse.push(gateGroup);
+  }
+  return hooks;
 }
 
-// Codex 用 TOML，事件键 PascalCase，数组表结构
+// Codex 用 TOML，事件键 PascalCase，数组表结构。
+// 注：codex 的 PostToolUse exit 2 阻断（与 Claude Code 同构），gate-check 保持挂 PostToolUse。
 function tomlHookLines() {
   const lines = ['# Harness hooks（由 .harness/hooks/install.js 生成，勿手改）'];
   const events = [
     ['PostToolUse', 'Bash|Write|Edit|apply_patch', 'post-tool-log.js', true, null],
     ['PostToolUse', 'Bash', 'check-verify.js', false, 10],
-    ['PreToolUse', 'Write|Edit', 'gate-check.js', false, 10],
+    ['PostToolUse', 'Write|Edit', 'gate-check.js', false, 10],
     ['Stop', null, 'gate-check.js', false, 10],
   ];
   for (const [event, matcher, script, isAsync, timeout] of events) {
@@ -209,7 +216,6 @@ function main() {
 
   const root = process.cwd();
   const home = os.homedir();
-  const jsonTemplate = buildJsonHooks(scope);
   const tomlContent = tomlHookLines();
   const report = [];
 
@@ -218,16 +224,17 @@ function main() {
       let filePath, result;
       if (cli === 'qoder') {
         filePath = scope === 'user' ? path.join(home, '.qoder-cn', 'settings.json') : path.join(root, '.qoder', 'settings.json');
-        result = writeJsonConfig(filePath, jsonTemplate);
+        result = writeJsonConfig(filePath, buildJsonHooks(scope, 'PostToolUse'));
       } else if (cli === 'claude') {
         filePath = scope === 'user' ? path.join(home, '.claude', 'settings.json') : path.join(root, '.claude', 'settings.json');
-        result = writeJsonConfig(filePath, jsonTemplate);
+        result = writeJsonConfig(filePath, buildJsonHooks(scope, 'PostToolUse'));
       } else if (cli === 'workbuddy' || cli === 'codebuddy') {
         // WorkBuddy/CodeBuddy 实测只读取用户级配置（<root>/.workbuddy/settings.json 项目级不加载），
-        // 因此强制注册到用户级（绝对路径）。脚本自身按 .harness 根判定，跨项目为 no-op，不会误伤。
+        // 因此强制注册到用户级（绝对路径）；gate-check 挂 PreToolUse（PostToolUse exit 2 不阻断）。
+        // 脚本自身按 .harness 根判定，跨项目为 no-op，不会误伤。
         const base = cli === 'workbuddy' ? '.workbuddy' : '.codebuddy';
         filePath = path.join(home, base, 'settings.json');
-        result = writeJsonConfig(filePath, buildJsonHooks('user'));
+        result = writeJsonConfig(filePath, buildJsonHooks('user', 'PreToolUse'));
         if (scope !== 'user') {
           console.log(`  [注意] ${cli} 仅支持用户级 hook（项目级配置不生效），已自动改用 --scope=user`);
         }
@@ -260,7 +267,9 @@ function main() {
   console.log('\n注册的 hook：');
   console.log('  PostToolUse(Bash|Write|Edit|apply_patch) -> post-tool-log.js（异步记账）');
   console.log('  PostToolUse(Bash)                         -> check-verify.js（绕过提醒）');
-  console.log('  PreToolUse(Write|Edit)                    -> gate-check.js（产出校验，exit 2 阻断写入）');
+  console.log('  gate-check.js（产出校验）挂载点按宿主区分：');
+  console.log('    claude/qoder/codex: PostToolUse(Write|Edit)   —— PostToolUse exit 2 阻断，校验落盘结果');
+  console.log('    workbuddy/codebuddy: PreToolUse(Write|Edit)   —— PostToolUse exit 2 不阻断，改用 PreToolUse 硬门禁');
   console.log('  Stop                                      -> gate-check.js（收尾校验）');
 }
 
