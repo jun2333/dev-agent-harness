@@ -1,0 +1,3 @@
+name: Harness 模式
+description: DevAgent Harness 编排模式（DSH 专属版本）。先计划→实现→验证→审查，每阶段独立子代理 + 机械校验 + 人工门禁。
+order: 5

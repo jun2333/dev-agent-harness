@@ -22,9 +22,11 @@ DSH 版本把这些约束迁移到运行时结构：
 ```
 dsh/
 ├── README.md                    # 本文档
-├── install.js                   # DSH 目标安装器（复制 preset 到 ~/.dsh/.agent-presets/）
+├── ab-experiment-report.md      # A/B 实验报告（编排流优先落地的决策依据）
+├── runtime-verification.md      # DSH 运行时能力验证报告（preset 格式/沙箱/工具可用性）
+├── install.js                   # DSH 目标安装器（复制 preset 目录到 ~/.dsh/.agent-presets/）
 ├── preset/
-│   └── harness.preset.md        # Harness Mode 预设草案（两阶段锚定 + 权限映射）
+│   └── harness/                 # Harness 模式 preset（目录格式：preset.yml + agent.cordis.yml + NOTICE）
 ├── stage-schema.json            # 阶段 schema（单一真相源，与 gate-check 的 STAGE_REQUIREMENTS 同步）
 └── orchestrator.workflow.js     # 编排器原型（workflow 工具脚本模板）
 ```
@@ -43,9 +45,10 @@ dsh/
 ### P0 — 编排器 + A/B 验证（当前阶段）
 - [x] dsh/stage-schema.json（阶段 schema 单一真相源）
 - [x] dsh/orchestrator.workflow.js（通用编排器原型：bootstrap 解析 YAML → 逐阶段子代理 → schema 门禁 → on_fail 回退）
-- [x] dsh/preset/harness.preset.md（草案）+ dsh/install.js
+- [x] dsh/preset/harness/（preset 目录：preset.yml + agent.cordis.yml + NOTICE，基于 standard 适配，含 delegation 组）+ dsh/install.js
 - [x] **A/B 实验**（2026-08-18，taskflow 看板筛选）：完整报告见 [ab-experiment-report.md](ab-experiment-report.md)。结论：编排流审查更严（独立上下文无锚定偏差）、复盘翻倍、编排器上下文显著更轻、证据链两流均稳 → **编排器作为 DSH 默认执行模型优先落地**
-- [ ] **验证项**（启用前必做）：preset 实际格式 / 子代理沙箱权限 / subagent+workflow+ask_user_question 工具可用性 / 子代理 cwd
+- [x] **运行时验证**（2026-08-18）：见 [runtime-verification.md](runtime-verification.md)。preset=目录（agent.cordis.yml+preset.yml）已按真实格式重写；子代理无独立沙箱（权限会话级，阶段权限走会话默认+审批）；delegation 组（subagent/workflow/ask_user_question）已纳入 preset
+- [ ] 剩余验证：DSH 环境新建会话选「Harness 模式」冒烟装载；子代理 cwd 实测
 
 ### P1 — 证据链与双轨审查
 - [ ] verify 证据作为编排器 schema 校验项（verify_evidence 字段接入）
