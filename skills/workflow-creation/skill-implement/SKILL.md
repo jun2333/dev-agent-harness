@@ -30,7 +30,7 @@ description: 工作流插件包实施阶段。按设计方案编写 workflow.yam
 生成 workspace/{task-id}/changes.md（变更明细）
 
 ## 约束
-- workflow.yaml 必须通过 `node .harness/tools/workflow-check.js --target {name}` 校验
+- workflow.yaml 必须通过 `node .harness/workflows/workflow-creation/check/workflow-check.js --target {name}` 校验
 - sections 必须用标准区块标题（## Summary for downstream 等），参考同类工作流
 - skill 引用路径必须是已存在的方法论技能（.harness/skills/ 或 knowledge/skills/）
 - 不修改 gate-check.js / verify.js 代码（新工作流即插即用）

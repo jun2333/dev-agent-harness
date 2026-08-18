@@ -20,7 +20,8 @@
 
 const fs = require('fs');
 const path = require('path');
-const { loadWorkflowDefinition, resolveVerifyCommands } = require('./workflow-lib.js');
+// 插件包 check/ 脚本共享 harness 基础设施（相对 __dirname 定位，不依赖调用 cwd）
+const { loadWorkflowDefinition, resolveVerifyCommands } = require(path.join(__dirname, '..', '..', '..', 'tools', 'workflow-lib.js'));
 
 function findHarnessRoot(startDir) {
   const candidates = [startDir, process.cwd()];
@@ -39,8 +40,11 @@ function findHarnessRoot(startDir) {
 function parseArgs() {
   const args = process.argv.slice(2);
   const get = (name) => {
-    const a = args.find((x) => x.startsWith(`--${name}=`));
-    return a ? a.split('=').slice(1).join('=') : null;
+    const eq = args.find((x) => x.startsWith(`--${name}=`));
+    if (eq) return eq.slice(`--${name}=`.length);
+    const idx = args.indexOf(`--${name}`);
+    if (idx !== -1 && args[idx + 1] !== undefined) return args[idx + 1];
+    return null;
   };
   return { target: get('target'), root: get('root') };
 }
@@ -106,17 +110,27 @@ function main() {
 
   const failures = [];
   const workflowsDir = path.join(root, '.harness', 'workflows');
+  const projectDir = path.join(root, 'knowledge/plugins');
+  const checkedNames = [];
   let checked = 0;
 
   if (target) {
     checkWorkflow(root, target, failures);
+    checkedNames.push(target);
     checked = 1;
-  } else if (fs.existsSync(workflowsDir)) {
-    for (const entry of fs.readdirSync(workflowsDir, { withFileTypes: true })) {
-      if (!entry.isDirectory()) continue;
-      checkWorkflow(root, entry.name, failures);
-      checked++;
-    }
+  } else {
+    // 项目层 + 通用层全量（同名只校验项目版一次：loadWorkflowDefinition 项目优先）
+    const scan = (dir) => {
+      if (!fs.existsSync(dir)) return;
+      for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+        if (!entry.isDirectory() || checkedNames.includes(entry.name)) continue;
+        checkWorkflow(root, entry.name, failures);
+        checkedNames.push(entry.name);
+        checked++;
+      }
+    };
+    scan(projectDir);   // 项目层优先
+    scan(workflowsDir); // 通用层
   }
 
   if (checked === 0) {

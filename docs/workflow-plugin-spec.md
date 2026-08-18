@@ -7,7 +7,7 @@
 
 ```
 .harness/workflows/{name}/            # 通用层（submodule 内，所有项目共享）
-│                                    # 项目层（第二批）：harness-plugins/{name}/（项目仓库内）
+│                                    # 项目层（第二批）：knowledge/plugins/{name}/（项目仓库内）
 ├── workflow.yaml                    # 工作流定义（必填）
 ├── check/                           # 通用校验脚本（可选，随插件包分发）
 │   └── *.js                         #   脚本以项目根为 cwd 运行，exit 0 通过
@@ -44,11 +44,11 @@
 
 ## 3. 测试手段（verify.checks）
 
-测试手段两类，`checks` 数组按序执行，全部通过才算验证通过：
+`checks` 数组按序执行，全部通过才算验证通过。每个 check 按顺序解析：
 
 | 类型 | 写法 | 解析 |
 |------|------|------|
-| **内置 check** | `skill-check` 等 | 指向 `.harness/tools/{name}.js`（通用脚本，随 harness 分发） |
+| **插件包 check 脚本** | `skill-check` / `workflow-check` 等 | 查**当前工作流插件包**的 `check/{name}.js`（项目层优先 → 通用层）——校验脚本随插件包自包含，加新 check 不用改 harness 代码 |
 | **命令池 key** | `unit` / `lint` / `e2e` | 从项目 `knowledge/verify.config.json` 的 `commands` 对象按 key 取实际命令 |
 
 ```yaml
@@ -61,7 +61,7 @@ verify:
   checks: [skill-check]
 ```
 
-**他证原则（不可违背）**：`checks` 只能引用内置 check 或命令池 key，LLM 不能自选任意命令——验证命令来源必须可审计。
+**他证原则（不可违背）**：`checks` 只能引用插件包 `check/` 脚本或命令池 key，LLM 不能自选任意命令——验证命令来源必须可审计。
 
 ### 命令池格式（knowledge/verify.config.json）
 
@@ -83,13 +83,23 @@ verify:
 
 - **gate-check.js**：按 `checkpoint.workflow` 加载对应插件包 `workflow.yaml`（经 schema 校验），用当前 stage 的 `sections`/`require_verify` 校验产出物；testing/reviewing 阶段对账 verify 证据（命令 = 工作流 checks 解析结果）。插件包缺失 → 降级不阻塞（stderr 提示）。
 - **verify.js**：`--workflow <name>` 读取 `verify.checks` 并解析执行；无 workflow/checks 时 fallback 到命令池默认命令集。
-- **发现顺序**：项目层 `harness-plugins/{name}/`（优先，第二批）→ 通用层 `.harness/workflows/{name}/`（兜底）。
+- **发现顺序（已实现，项目层优先）**：
+  1. `knowledge/plugins/{name}/`（项目定制，优先）
+  2. `.harness/workflows/{name}/`（通用模板，兜底）
+  项目层与通用层同名时，项目版覆盖。`node .harness/tools/workflow-init.js list` 可列出全部可用工作流。
+
+## 4.5 工作流模板语义与项目实例化
+
+- **通用工作流 = 工作流模板**：骨架（步骤/产出要求）通用，但测试命令、通过标准必须项目定制（"改代码用什么测试命令、怎么测算通过"由项目决定）。
+- **项目层目录 `knowledge/plugins/`**（项目根，git 跟踪，与 knowledge/ 同属项目层）：放项目定制工作流插件包。
+- **实例化**：`knowledge-init workflow-init init <name>`（或 `node .harness/tools/workflow-init.js init <name>`）把模板复制到项目层并绑定项目命令池；`sync <name>` 同步上游模板更新（只补齐未定制部分）；`list` 列出可用工作流。
+- 项目版可自由增删阶段、改 gate、改 sections、绑定项目命令——不碰通用模板（父类保持纯净）。
 
 ## 5. 自定义工作流步骤（如何新增插件包）
 
 1. 建目录 `workflows/{name}/`，写 `workflow.yaml`（按 §2 字段）
 2. 声明 `verify.checks`（内置 check 或命令池 key）
-3. 需要项目专属校验时：命令池加 key，或内置 check 提交到 `.harness/tools/`（通用）——**项目专属脚本**放项目层插件包 `check/`（第二批 harness-plugins 支持）
+3. 需要项目专属校验时：命令池加 key，或内置 check 提交到 `.harness/tools/`（通用）——**项目专属脚本**放项目层插件包 `check/`（第二批 knowledge/plugins 支持）
 4. 用 `node .harness/tools/workflow-validate.js` 校验插件包合法性
 5. harness.md 启动时选择该工作流即可
 

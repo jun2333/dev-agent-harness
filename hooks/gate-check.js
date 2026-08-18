@@ -24,7 +24,7 @@
 const fs = require('fs');
 const path = require('path');
 const { readStdin, findHarnessRoot, emitReminder, exitBlock, exitOk } = require('./lib.js');
-const { loadWorkflowDefinition, resolveVerifyCommands } = require('../tools/workflow-lib.js');
+const { loadWorkflowDefinition, resolveVerifyCommands, listWorkflows } = require('../tools/workflow-lib.js');
 
 function readJson(file) {
   try {
@@ -229,6 +229,7 @@ function main() {
 module.exports = {
   loadWorkflowDefinition,
   resolveVerifyCommands,
+  listWorkflows,
   taskIdFromPath,
   latestCheckpoint,
   checkStage,

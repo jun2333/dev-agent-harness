@@ -14,7 +14,7 @@ description: 工作流插件包测试阶段。用 workflow-check 校验插件包
 - 实施记录（changes.md）
 
 ## 执行步骤
-1. 校验插件包合法性：`node .harness/tools/workflow-check.js --target {name}`（exit 0 必须通过）
+1. 校验插件包合法性：`node .harness/workflows/workflow-creation/check/workflow-check.js --target {name}`（exit 0 必须通过）
 2. 加载验证：`node -e "require('./.harness/tools/workflow-lib.js').loadWorkflowDefinition(process.cwd(), '{name}')"` 确认 stages/verify 解析正确
 3. 验证 verify 手段可执行：`node .harness/tools/verify.js run --workflow {name} ...`（checks 声明的命令能解析并执行）
 4. 可操作性检查（按 skill-implement 的产出物逐步核对）：

@@ -35,4 +35,4 @@ description: 工作流插件包设计阶段。分析新工作流需求，按 wor
 ## 约束
 - 严格遵循 workflow-schema.json 字段与值域（gate 枚举、sections 二维数组）
 - 新工作流产出物要求必须迁入 workflow.yaml，不改 gate-check.js 代码
-- 涉及项目专属内容时标注"项目层 harness-plugins/（待第二批）"
+- 涉及项目专属内容时标注"项目层 knowledge/plugins/（待第二批）"

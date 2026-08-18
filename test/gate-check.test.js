@@ -58,12 +58,16 @@ test('resolveVerifyCommands：命令池 key 解析（unit → 具体命令）', 
   assert.deepStrictEqual(resolveVerifyCommands(root, wfDef), ['npm test', 'npm run lint']);
 });
 
-test('resolveVerifyCommands：skill-check 解析为内置脚本（无需项目命令池）', () => {
+test('resolveVerifyCommands：插件包 check/ 脚本解析（无需项目命令池）', () => {
   const root = makeTempProject({});
-  const wfDef = { verify: { checks: ['skill-check'] } };
+  // 建临时插件包 check/ 脚本
+  const checkDir = path.join(root, '.harness', 'workflows', 'demo-flow', 'check');
+  fs.mkdirSync(checkDir, { recursive: true });
+  fs.writeFileSync(path.join(checkDir, 'demo-check.js'), 'console.log("ok");');
+  const wfDef = { name: 'demo-flow', verify: { checks: ['demo-check'] } };
   const cmds = resolveVerifyCommands(root, wfDef);
   assert.strictEqual(cmds.length, 1);
-  assert.ok(cmds[0].includes('skill-check.js'));
+  assert.ok(cmds[0].includes('demo-check.js'));
 });
 
 test('resolveVerifyCommands：checks 为空返回 null（无 verify 命令要求）', () => {
@@ -129,4 +133,68 @@ test('checkVerifyEvidence 未 passed 直接失败', () => {
   });
   const failures = checkVerifyEvidence(root, 't1', ['npm test']);
   assert.ok(failures.some((f) => /未通过/.test(f)));
+});
+
+// ---------- 项目层插件机制（第二批） ----------
+
+const { listWorkflows } = require('../hooks/gate-check.js');
+
+/** 建含通用层 + 项目层工作流的临时项目根 */
+function makeProjectWithPlugins(genericName, projectName) {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'harness-plug-'));
+  // 通用层
+  const genDir = path.join(root, '.harness', 'workflows', genericName);
+  fs.mkdirSync(genDir, { recursive: true });
+  fs.writeFileSync(
+    path.join(genDir, 'workflow.yaml'),
+    `name: ${genericName}\ndescription: 通用模板\nverify:\n  checks: [unit]\nstages:\n  - name: implementing\n    skill: knowledge/skills/implementing/skill.md\n    output: changes.md\n    sections:\n      - [## Summary for downstream]\n`
+  );
+  // 项目层（同名覆盖 + 项目独有）
+  if (projectName) {
+    const projDir = path.join(root, 'knowledge/plugins', projectName);
+    fs.mkdirSync(projDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(projDir, 'workflow.yaml'),
+      `name: ${projectName}\ndescription: 项目定制版\nverify:\n  checks: [unit, coverage]\nstages:\n  - name: implementing\n    skill: knowledge/skills/implementing/skill.md\n    output: changes.md\n    sections:\n      - [## Summary for downstream]\n      - [## Project Marker]\n`
+    );
+  }
+  return root;
+}
+
+test('loadWorkflowDefinition：项目层优先（同名覆盖通用层）', () => {
+  const root = makeProjectWithPlugins('feature', 'feature');
+  const def = loadWorkflowDefinition(root, 'feature');
+  assert.ok(def);
+  assert.strictEqual(def.source, 'project');
+  assert.deepStrictEqual(def.verify.checks, ['unit', 'coverage']); // 项目版 checks
+});
+
+test('loadWorkflowDefinition：无项目版时回退通用模板', () => {
+  const root = makeProjectWithPlugins('feature', null);
+  const def = loadWorkflowDefinition(root, 'feature');
+  assert.ok(def);
+  assert.strictEqual(def.source, 'harness');
+});
+
+test('loadWorkflowDefinition：项目独有工作流只在项目层解析', () => {
+  const root = makeProjectWithPlugins('feature', 'release-flow');
+  const def = loadWorkflowDefinition(root, 'release-flow');
+  assert.ok(def);
+  assert.strictEqual(def.source, 'project');
+  assert.strictEqual(loadWorkflowDefinition(root, 'nope'), null);
+});
+
+test('listWorkflows：合并项目层与通用层，同名只列项目版', () => {
+  const root = makeProjectWithPlugins('feature', 'feature'); // 同名覆盖
+  // 再补一个纯通用工作流
+  const bugfixDir = path.join(root, '.harness', 'workflows', 'bugfix');
+  fs.mkdirSync(bugfixDir, { recursive: true });
+  fs.writeFileSync(path.join(bugfixDir, 'workflow.yaml'),
+    'name: bugfix\ndescription: bug\nstages:\n  - name: implementing\n    skill: x\n    output: changes.md\n');
+  const workflows = listWorkflows(root);
+  const names = workflows.map((w) => w.name);
+  assert.ok(names.includes('feature'));
+  assert.ok(names.includes('bugfix'));
+  const feature = workflows.find((w) => w.name === 'feature');
+  assert.strictEqual(feature.source, 'project'); // 项目版覆盖
 });

@@ -110,6 +110,36 @@ description: 知识库初始化与维护。手动触发：用户说"初始化知
 - **必须保留框架模板中的通用规范**，不能遗漏
 - 生成的报告模板作为默认模板，项目可覆盖
 
+## 子命令：workflow-init
+工作流模板实例化（第二批：项目层定制）。把通用工作流模板（`.harness/workflows/`）复制到项目层 `knowledge/plugins/` 并增强。
+
+**模板语义**：通用工作流只是骨架（步骤定义），测试命令/通过标准必须项目定制——"改代码用什么测试命令、怎么测算通过"由项目决定。
+
+### init <name> [--as <new-name>] [--force]
+把通用模板实例化到项目层：
+1. 执行 `node .harness/tools/workflow-init.js init <name> [--as ...] [--force]`（确定性操作：复制 + 命令池校验）
+2. 校验输出：命令池 key 缺失 → 补 `knowledge/verify.config.json` 的 commands 后再试（--force 可跳过，但 verify 会不可用）
+3. **项目增强（语义判断，agent 必须执行）**：编辑 `knowledge/plugins/{name}/workflow.yaml`：
+   - `verify.checks` → 绑定项目实际测试手段（unit/lint/e2e 对应项目命令，或内置 check）
+   - 按项目流程增删阶段、调整 `gate`（审批点）、改 `sections`（产出物要求）
+   - 项目专属校验 → 在项目副本声明（内置 check 或命令池 key）
+4. 验证：`node .harness/workflows/workflow-creation/check/workflow-check.js --target {name}`（项目版过校验）；`node .harness/tools/workflow-init.js list` 确认 source=project
+
+### sync <name>
+上游模板更新后同步项目副本：
+1. 执行 `node .harness/tools/workflow-init.js sync <name>`（输出需补齐字段 + 项目定制保留项 + 冲突）
+2. **补齐"模板有而项目缺"的字段/阶段**（对照模板文件手工补齐，不覆盖项目已有定制）
+3. 冲突（同字段两边都改）→ 与用户确认后再动；确认后手动合并
+
+### list
+列出全部可用工作流（项目层 + 通用层，标注 source）。供 harness.md 启动选流。
+
+### 约束
+- 项目层 `knowledge/plugins/` 与 knowledge/ 同属项目仓库（git 跟踪），**不进 submodule、不被 .gitignore**
+- 解析顺序：项目层优先、通用兜底；同名项目版覆盖通用版
+- 他证不变：verify 命令来源 = 工作流定义 + 项目命令池
+- sync 只补齐"模板有项目无"，不覆盖项目定制
+
 ## 子命令：optimize
 整理索引、合并重复、归档过期条目。
 
