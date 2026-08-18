@@ -60,18 +60,27 @@
 | **bugfix** | 计划 → 实施 → 测试 → 审查 → 复盘 → Git | Bug 修复 |
 | **refactor** | 设计 → 计划 → 实施 → 测试 → 审查 → 复盘 → Git | 代码重构 |
 | **project-init** | 初始化 → 复盘 → Git | 从零搭建项目 |
+| **skill-creation** | 设计 → 实施 → 测试 → 复盘 | 创建/重构 harness 技能（非代码任务） |
 
 每个阶段都有明确的输入/输出定义和 gate 控制（需用户确认才能进入下一阶段）。
 
-## 通用技能
+## 通用技能（通用层 `skills/` 分四组）
 
-| 技能 | 说明 |
-|------|------|
-| **knowledge-init** | 知识库初始化与维护。扫描项目代码自动生成编码规范、代码模式、阶段技能 |
-| **reflecting** | 项目复盘 + 经验收集。两阶段：自动复盘生成草稿 → 手动收集到知识库 |
-| **skill-evolution** | 技能自成长。汇总 skill-logs，发现技能不足并持续优化 |
-| **state-checkpoint** | 状态记录与断点恢复。支持任务中断后从断点继续 |
-| **project-init** | 从零开始的项目初始化（技术选型 + 标准定制 + 脚手架搭建） |
+> 仓库根的 `skills/` 按职责分四组，项目层（`knowledge/skills/`）可按 `skill-interface.md` 的加载优先级覆盖同名的框架/工具类技能。
+
+| 分组 | 目录 | 技能 | 说明 |
+|------|------|------|------|
+| 框架层 | `skills/framework/` | **reflecting** | 项目复盘 + 经验收集。两阶段：自动复盘生成草稿 → 手动收集到知识库 |
+| | | **state-checkpoint** | 状态记录与断点恢复。支持任务中断后从断点继续 |
+| | | **hook-init** | hook 初始化：安装/接线门禁脚本（gate-check / check-verify） |
+| 技能自举 | `skills/skill-creation/` | **skill-design** | 设计新技能 |
+| | | **skill-evolution** | 技能自成长。汇总 skill-logs，发现技能不足并持续优化 |
+| | | **skill-implement** | 实现技能 |
+| | | **skill-test** | 测试技能 |
+| 工具类 | `skills/tools/` | **knowledge-init** | 知识库初始化与维护。扫描项目代码自动生成规范、模式、阶段技能 |
+| | | **project-init** | 从零开始的项目初始化（技术选型 + 标准定制 + 脚手架搭建） |
+| | | **tech-audit** | 技术审计 |
+| 框架模板 | `skills/domain-templates/` | designing / task-planning / implementing / testing / reviewing | 5 个框架级标准 skill 模板；由 `knowledge-init skills` 继承生成项目层 skill |
 
 ## 使用方式
 
@@ -124,19 +133,23 @@ skill-evolution review
 ├── harness.md              # Agent 入口（必读）
 ├── skill-interface.md      # Skill 接口规范
 ├── context-rules/          # 上下文加载策略
-├── docs/                   # 设计文档
-├── skills/                 # 通用技能
-│   ├── knowledge-init/     # 知识库初始化
-│   ├── reflecting/         # 复盘 + 经验收集
-│   ├── skill-evolution/    # 技能自成长
-│   ├── state-checkpoint/   # 状态记录与断点恢复
-│   └── project-init/       # 项目初始化
+│   ├── file-discovery.md
+│   └── loading-strategy.md
+├── docs/                   # 设计文档（DESIGN.md）
+├── skills/                 # 通用层技能（四组，见上方「通用技能」表）
+│   ├── framework/          # 框架层：reflecting / state-checkpoint / hook-init
+│   ├── skill-creation/     # 技能自举：skill-design / skill-evolution / skill-implement / skill-test
+│   ├── tools/              # 工具类：knowledge-init / project-init / tech-audit
+│   └── domain-templates/   # 框架模板：designing / task-planning / implementing / testing / reviewing
 ├── templates/              # 默认产出模板
-├── workflows/              # 工作流定义
+├── tools/                  # 可执行工具：verify.js / skill-log.js
+├── hooks/                  # 门禁脚本：gate-check.js / check-verify.js / lib.js / install.js
+├── workflows/              # 工作流定义（5 个 YAML）
 │   ├── feature.yaml
 │   ├── bugfix.yaml
 │   ├── refactor.yaml
-│   └── project-init.yaml
+│   ├── project-init.yaml
+│   └── skill-creation.yaml
 └── workspace/              # 运行时产物（gitignore）
     └── {task-id}/
         ├── task.md

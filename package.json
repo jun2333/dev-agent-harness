@@ -1,0 +1,13 @@
+{
+  "name": "dev-agent-harness",
+  "version": "0.4.0",
+  "private": true,
+  "description": "面向软件开发的通用 AI 工作流工具箱（通用层 harness 定义）",
+  "license": "MIT",
+  "scripts": {
+    "test": "node --test"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

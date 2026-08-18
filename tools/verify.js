@@ -143,8 +143,9 @@ function runVerification(config, configPath, rootDir, outputDir, reportPath) {
 
 // ---------------------------------------------------------------- CLI 入口
 
-const args = process.argv.slice(2);
-const subcommand = args[0];
+function runCli() {
+  const args = process.argv.slice(2);
+  const subcommand = args[0];
 
 /** 兼容 --flag=value 与 --flag value 两种形式 */
 function getArg(name) {
@@ -212,3 +213,9 @@ try {
   console.error(`[harness verify] ${e.message}`);
   process.exit(1);
 }
+
+}
+
+module.exports = { findVerifyConfig, readConfig, runVerification };
+
+if (require.main === module) runCli();

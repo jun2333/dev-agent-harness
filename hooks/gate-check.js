@@ -227,4 +227,6 @@ function main() {
   exitOk();
 }
 
-main();
+module.exports = { STAGE_REQUIREMENTS, readJson, taskIdFromPath, latestCheckpoint, checkStage, checkVerifyEvidence };
+
+if (require.main === module) main();

@@ -36,10 +36,11 @@
 │  ├── workflows/             # 工作流编排（阶段顺序、gate）    │
 │  ├── context-rules/         # 上下文加载策略                  │
 │  ├── skill-interface.md     # Skill 接口规范（目录结构、格式）│
-│  └── skills/                # 通用 skill（所有项目共用）       │
-│      ├── reflecting.md      # 复盘 + 经验收集（两阶段技能）    │
-│      ├── knowledge-init.md  # 知识库初始化与维护              │
-│      └── state-checkpoint.md  # 状态记录与断点恢复            │
+│  └── skills/                # 通用层技能（四组）               │
+│      ├── framework/         # 框架层：reflecting/state-checkpoint/hook-init │
+│      ├── skill-creation/    # 技能自举：skill-design/evolution/implement/test │
+│      ├── tools/             # 工具类：knowledge-init/project-init/tech-audit │
+│      └── domain-templates/  # 框架模板：designing/.../reviewing            │
 │                                                             │
 │  ▲ 定义 workflow 编排逻辑 + skill 接口规范                   │
 │  ▲ 不含任何领域特定的业务 skill                               │
@@ -100,7 +101,7 @@
 
 | 层级 | 位置 | 内容 | 维护者 |
 |------|------|------|--------|
-| 通用层 | harness 仓库 | workflow 编排 + skill 接口规范 + 通用 skill（reflecting / knowledge-init / state-checkpoint） | harness 维护者 |
+| 通用层 | harness 仓库 | workflow 编排 + skill 接口规范 + 通用层技能（framework / skill-creation / tools / domain-templates 四组） | harness 维护者 |
 | 项目层 | `knowledge/` | 项目特定 skill 实现（含 git-operations）+ 项目规范/经验/模板 | 项目团队 + Agent（knowledge-init） |
 
 ### Skill 接口规范
@@ -165,22 +166,25 @@
 ```
 dev-agent-harness/
 │
-├├── workflows/                     # 工作流定义
+├├── workflows/                     # 工作流定义（5 个 YAML）
 │   ├── feature.yaml               # 新功能开发流程
 │   ├── bugfix.yaml                # Bug 修复流程
 │   ├── refactor.yaml              # 重构流程
-│   └── project-init.yaml          # 从零开始的项目初始化流程
+│   ├── project-init.yaml          # 从零开始的项目初始化流程
+│   └── skill-creation.yaml        # 技能创建/重构流程
 │
 ├── context-rules/                 # 上下文加载策略
 │   ├── file-discovery.md          # 如何定位相关文件
 │   └── loading-strategy.md        # 各阶段的上下文加载规则
 │
-├── skills/                        # 通用 skill（所有项目共用）
-│   ├── reflecting.md              # 复盘 + 经验收集（两阶段技能）
-│   ├── knowledge-init.md          # 知识库初始化与维护（拆分为 scan/skills/optimize）
-│   └── state-checkpoint.md        # 状态记录与断点恢复
+├── skills/                        # 通用层技能（四组，按职责分层）
+│   ├── framework/                 # 框架层：reflecting / state-checkpoint / hook-init
+│   ├── skill-creation/            # 技能自举：skill-design / skill-evolution / skill-implement / skill-test
+│   ├── tools/                     # 工具类：knowledge-init / project-init / tech-audit
+│   └── domain-templates/          # 框架模板：designing / task-planning / implementing / testing / reviewing
 │
 ├── skill-interface.md             # Skill 接口规范
+├── docs/                          # 设计文档（本文件 DESIGN.md）
 │
 ├── templates/                     # 默认产出模板（可被项目层覆盖）
 │   ├── task-input.md              # 任务输入模板
@@ -189,6 +193,9 @@ dev-agent-harness/
 │   ├── test-report-output.md      # 测试报告模板
 │   └── review-report-output.md    # 审查报告模板
 │
+├── tools/                         # 可执行工具：verify.js / skill-log.js
+├── hooks/                         # 门禁脚本：gate-check.js / check-verify.js / lib.js / install.js
+├── changelog/                     # 版本演进记录
 ├── workspace/                     # 任务执行空间（产物目录）
 │   └── {task-id}/
 │       ├── task.md                # 任务描述（用户输入）
@@ -248,10 +255,10 @@ dev-agent-harness/
 
 ### 2. Skills — 技能定义
 
-Skill 分为两类：
+Skill 分为两类（仓库根的 `skills/` 按职责分四组：`framework/`、`skill-creation/`、`tools/`、`domain-templates/`）：
 
-- **通用 skill**（harness 仓库提供）：reflecting（两阶段：自动复盘 + 手动收集经验）、knowledge-init、state-checkpoint，所有项目共用
-- **业务 skill**（项目层实现）：designing、task-planning、implementing、testing、reviewing、git-operations、project-init，由项目通过 knowledge-init 生成或人工编写
+- **通用/框架 skill**（harness 仓库提供，所有项目共用）：`framework/`（reflecting、state-checkpoint、hook-init）、`skill-creation/`（skill-design、skill-evolution、skill-implement、skill-test）、`tools/`（knowledge-init、project-init、tech-audit）
+- **业务 skill**（项目层实现）：designing、task-planning、implementing、testing、reviewing、git-operations，由项目通过 `knowledge-init skills` 基于 `domain-templates/` 的框架模板继承生成或人工编写
 
 #### 通用 Skill 示例：reflecting.md
 
