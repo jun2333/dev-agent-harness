@@ -1,17 +1,19 @@
 #!/usr/bin/env node
 
 /**
- * gate-check.js — 阶段门禁校验（exit 2 阻塞阶段推进）
+ * gate-check.js — 阶段门禁校验（PreToolUse exit 2 阻断工具调用）
  *
- * 注册：PostToolUse 匹配 Write|Edit（写产出物后立即校验）+ Stop（任务收尾终检）
+ * 注册：PreToolUse 匹配 Write|Edit（写产出物前校验，阻断不合规写入）+ Stop（任务收尾终检）
+ * 设计依据：WorkBuddy/CodeBuddy 的 hook 契约中 PostToolUse「工具已运行，无法阻止已执行的操作」，
+ *          exit 2 只向 Agent 显示消息、不阻断；仅 PreToolUse 的 exit 2 能真正阻止工具调用。
+ *          （2026-08-18 实测：PostToolUse exit 2 + stderr 静默，PreToolUse 为唯一硬门禁通道）
  * 校验：
- *   1. 当前阶段产出物存在（checkpoint.json 的 current_stage 对应的 output 文件）
- *   2. 产出物包含该阶段必含区块（Summary / Decision Log / Anti-Cherry-Pick，按阶段）
- *   3. testing / reviewing 阶段必须存在 verify 证据（verification-result.json 且 passed），
+ *   1. 当前阶段产出物包含该阶段必含区块（Summary / Decision Log / Anti-Cherry-Pick，按阶段）
+ *   2. testing / reviewing 阶段必须存在 verify 证据（verification-result.json 且 passed），
  *      且证据命令必须与项目配置 knowledge/verify.config.json 对账（他证）：
  *      - 证据中不能有配置外的命令（禁止自选命令 = 禁止自证）
  *      - 配置中所有命令必须全量出现在证据中（禁止只跑部分）
- * 失败：PostToolUse 时 exit 2 + stderr 列出缺失项，CLI 拦截并反馈给 LLM 补齐；
+ * 失败：PreToolUse 时 exit 2 + stderr 列出缺失项，阻断写入并反馈给 LLM 补齐；
  *       Stop 时只发提醒不阻塞（避免用户中途退出会话被卡住）
  * 容错：不在 harness 任务中（无 checkpoint）→ exit 0，不打扰普通开发；
  *       checkpoint.json 自身写入跳过校验（阶段切换时先写 checkpoint 再产出文件，顺序自由）
@@ -97,7 +99,7 @@ function latestCheckpoint(root) {
   return latest;
 }
 
-function checkStage(root, taskDir, checkpoint) {
+function checkStage(root, taskDir, checkpoint, contentOverride) {
   const stage = checkpoint.current_stage;
   const req = STAGE_REQUIREMENTS[stage];
   const output = (checkpoint.stage_outputs && checkpoint.stage_outputs[stage]) || (req && req.output);
@@ -106,12 +108,17 @@ function checkStage(root, taskDir, checkpoint) {
   const failures = [];
   const outputPath = path.join(root, '.harness', 'workspace', taskDir, output);
 
-  if (!fs.existsSync(outputPath)) {
-    failures.push(`产出物缺失：${path.join('workspace', taskDir, output)}`);
-    return failures;
+  // contentOverride：PreToolUse 时由 tool_input 提供的待写入内容（文件尚未落盘），
+  // 此时跳过"产出物缺失"检查（写入本身即是首次创建）；PostToolUse 则读磁盘实际内容。
+  let content = contentOverride;
+  if (content === null || content === undefined) {
+    if (!fs.existsSync(outputPath)) {
+      failures.push(`产出物缺失：${path.join('workspace', taskDir, output)}`);
+      return failures;
+    }
+    content = fs.readFileSync(outputPath, 'utf8');
   }
 
-  const content = fs.readFileSync(outputPath, 'utf8');
   for (const group of req.sections) {
     if (!group.some(sec => content.includes(sec))) {
       failures.push(
@@ -189,14 +196,36 @@ function main() {
   const workspaceDir = path.join(root, '.harness', 'workspace');
   const event = input && input.hook_event_name;
   let taskId = null;
+  let contentOverride = null; // PreToolUse：tool_input 提供的待写入内容（Write content / Edit 模拟结果）
 
-  if (event === 'PostToolUse' && (input.tool_name === 'Write' || input.tool_name === 'Edit')) {
-    // Write 的 tool_input 是 {file_path} 对象；部分 CLI 的 Edit 直接传路径字符串，两种都兼容
+  if ((event === 'PreToolUse' || event === 'PostToolUse') && (input.tool_name === 'Write' || input.tool_name === 'Edit')) {
+    // Write 的 tool_input 是 {file_path, content}；Edit 是 {file_path, old_string, new_string}；
+    // 部分 CLI 直接传路径字符串，两种都兼容
     const ti = input.tool_input;
     const filePath = typeof ti === 'string' ? ti : ti && ti.file_path;
     // checkpoint.json 自身写入跳过校验：阶段切换可以先行写 checkpoint，再产出该阶段文件
     if (filePath && path.basename(filePath) === 'checkpoint.json') exitOk();
     taskId = taskIdFromPath(root, filePath);
+
+    if (event === 'PreToolUse' && taskId) {
+      // PreToolUse 只对"当前阶段产出物文件"做内容校验；写其他文件不干预
+      const cp = readJson(path.join(workspaceDir, taskId, 'checkpoint.json'));
+      const stage = cp && cp.current_stage;
+      const req = STAGE_REQUIREMENTS[stage];
+      const output = cp && cp.stage_outputs ? cp.stage_outputs[stage] : (req && req.output);
+      const outputPath = output && path.join(workspaceDir, taskId, output);
+      if (!outputPath || path.resolve(outputPath) !== path.resolve(filePath)) exitOk();
+
+      // 提取待写入内容（Write 有完整 content；Edit 模拟 old→new 替换）
+      if (input.tool_name === 'Write' && ti && typeof ti.content === 'string') {
+        contentOverride = ti.content;
+      } else if (input.tool_name === 'Edit' && ti) {
+        const existing = fs.existsSync(filePath) ? fs.readFileSync(filePath, 'utf8') : '';
+        const os = typeof ti.old_string === 'string' ? ti.old_string : '';
+        const ns = typeof ti.new_string === 'string' ? ti.new_string : '';
+        contentOverride = os ? existing.split(os).join(ns) : existing;
+      }
+    }
   } else if (event === 'Stop') {
     const cp = latestCheckpoint(root);
     if (cp) taskId = path.basename(path.dirname(cp));
@@ -208,7 +237,7 @@ function main() {
   const checkpoint = readJson(path.join(taskDir, 'checkpoint.json'));
   if (!checkpoint) exitOk();
 
-  const failures = checkStage(root, taskId, checkpoint);
+  const failures = checkStage(root, taskId, checkpoint, contentOverride);
   if (failures.length > 0) {
     const detail = failures.map(f => `- ${f}`).join('\n');
     if (event === 'Stop') {

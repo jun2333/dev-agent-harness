@@ -49,6 +49,10 @@ function buildJsonHooks(scope) {
         matcher: 'Bash',
         hooks: [{ type: 'command', command: cmd('check-verify.js'), name: 'harness-check-verify', timeout: 10, statusMessage: 'harness: 检查验证命令' }],
       },
+    ],
+    // gate-check 挂 PreToolUse：WorkBuddy/CodeBuddy 契约中 PostToolUse exit 2 不阻断
+    // （工具已执行完，无法阻止），仅 PreToolUse exit 2 能真正阻止写入（2026-08-18 实测）。
+    PreToolUse: [
       {
         matcher: 'Write|Edit',
         hooks: [{ type: 'command', command: cmd('gate-check.js'), name: 'harness-gate-check', timeout: 10, statusMessage: 'harness: 阶段产出校验' }],
@@ -68,7 +72,7 @@ function tomlHookLines() {
   const events = [
     ['PostToolUse', 'Bash|Write|Edit|apply_patch', 'post-tool-log.js', true, null],
     ['PostToolUse', 'Bash', 'check-verify.js', false, 10],
-    ['PostToolUse', 'Write|Edit', 'gate-check.js', false, 10],
+    ['PreToolUse', 'Write|Edit', 'gate-check.js', false, 10],
     ['Stop', null, 'gate-check.js', false, 10],
   ];
   for (const [event, matcher, script, isAsync, timeout] of events) {
@@ -256,7 +260,7 @@ function main() {
   console.log('\n注册的 hook：');
   console.log('  PostToolUse(Bash|Write|Edit|apply_patch) -> post-tool-log.js（异步记账）');
   console.log('  PostToolUse(Bash)                         -> check-verify.js（绕过提醒）');
-  console.log('  PostToolUse(Write|Edit)                    -> gate-check.js（产出校验）');
+  console.log('  PreToolUse(Write|Edit)                    -> gate-check.js（产出校验，exit 2 阻断写入）');
   console.log('  Stop                                      -> gate-check.js（收尾校验）');
 }
 
