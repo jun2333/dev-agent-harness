@@ -238,7 +238,7 @@ dev-agent-harness/
 
 ### 2. Skills — 技能定义
 
-Skill 分为两类（仓库根的 `skills/` 按职责分四组：`framework/`、`skill-creation/`、`tools/`、`domain-templates/`）：
+Skill 分为两类（仓库根的 `skills/` 按职责分五组：`framework/`、`skill-creation/`、`workflow-creation/`、`tools/`、`domain-templates/`）：
 
 - **通用/框架 skill**（harness 仓库提供，所有项目共用）：`framework/`（reflecting、state-checkpoint、hook-init）、`skill-creation/`（skill-design、skill-evolution、skill-implement、skill-test）、`tools/`（knowledge-init、project-init、tech-audit）
 - **业务 skill**（项目层实现）：designing、task-planning、implementing、testing、reviewing、git-operations，由项目通过 `knowledge-init skills` 基于 `domain-templates/` 的框架模板继承生成或人工编写
@@ -534,7 +534,7 @@ Skill 分为两类（仓库根的 `skills/` 按职责分四组：`framework/`、
 
 YAML 文件定义阶段序列和阶段间的依赖关系。
 
-#### 示例：feature.yaml
+#### 示例：workflows/feature/workflow.yaml（插件包结构示意）
 
 ```yaml
 name: feature
@@ -651,6 +651,22 @@ workflows/{name}/check/            # 插件专属校验脚本（可选）
 - **check 脚本回归插件包**：校验脚本随工作流自包含（非通用脚本不放 tools/），新增 check 零 harness 代码改动
 
 详细规范见 `docs/workflow-plugin-spec.md`。
+
+### 3.6 宿主执行差异（CLI/WorkBuddy vs DSH）
+
+同一套通用层机制（工作流插件包 / gate 数据驱动 / verify 他证），在不同宿主环境下**执行方式不同**——机制不变，载体变：
+
+| 维度 | CLI / WorkBuddy（hook 驱动） | DSH（编排器驱动） |
+|------|------------------------------|-------------------|
+| 流程执行 | LLM 自读 workflow.yaml 按阶段推进（提示词约定） | 编排器（orchestrator）逐阶段驱动干净子代理，失败程序化回退（on_fail） |
+| 产出物门禁 | gate-check.js：PreToolUse exit 2 硬阻断（WorkBuddy）/ PostToolUse（Claude） | 数据级：子代理返回 JSON 摘要 + schema 校验（sections_ok/verify_evidence） |
+| 人工门禁 | 提示词约定停等 + Stop 收尾提醒 | 流程级：ask_user_question（gate: user_approval 程序化） |
+| 危险操作 | 提示词约定 | 工具级：沙箱权限 + 审批（justification，permission/tools 字段驱动） |
+| 验证证据 | verify.js 手动执行落盘 verification-result.json | 同一配置 + 编排器校验 verify_evidence 字段 |
+| 确定性兜底 | gate-check（产出物+证据对账） | 复用 gate-check.js（bash 直调） |
+| 上下文 | 单会话加载 context-rules | 每阶段干净子代理 + 输入白名单（账本消失） |
+
+**单一真相源**：两种宿主都从工作流插件包 `workflow.yaml` 读定义（sections/permission/tools/verify）——`dsh/stage-schema.json` 已删除，不再有第二份阶段定义。
 
 ---
 
@@ -859,7 +875,7 @@ design.md
 用户: "实现一个用户注册功能"
   │
   ▼
-[加载 harness.md] → 识别为 feature 类型 → 加载 workflows/feature.yaml
+[加载 harness.md] → 识别为 feature 类型 → 加载 workflows/feature/workflow.yaml（插件包）
   │
   ▼
 ┌─ Stage 1: Designing ─────────────────────────────┐
@@ -1162,11 +1178,3 @@ harness 设计为与 QoderCLI 天然兼容：
 1. **harness.md** 可作为 QoderCLI 的 AGENT.md 或自定义 skill 加载
 2. **workspace/** 产物文件可在项目 .gitignore 中排除或按需提交
 3. **knowledge/** 随项目版本管理，团队共享经验
-
----
-
-## 待讨论
-
-1. ~~**Skill 细化**~~ — 已解决：harness 定义接口规范（skill-interface.md），业务 skill 由项目层通过 knowledge-init 生成或人工编写
-2. ~~**工作流执行载体**~~ — 已解决：先用 LLM 自驱动，后续如有跳步问题再加脚本兜底
-3. ~~**知识库初始化**~~ — 已解决：knowledge-init 扫描项目自动生成 standards / patterns / 业务 skill / 默认模板

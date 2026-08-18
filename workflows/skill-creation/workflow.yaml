@@ -20,6 +20,8 @@ stages:
       - [## Summary for downstream]
       - [## Decision Log]
     require_verify: false
+    permission: read-only
+    tools: read+bash
     gate: user_approval
     post_stage:
       - skill: skills/framework/state-checkpoint.md
@@ -33,6 +35,8 @@ stages:
     sections:
       - [## Summary for downstream]
     require_verify: false
+    permission: workspace-write
+    tools: code-mode
     gate: none
     post_stage:
       - skill: skills/framework/state-checkpoint.md
@@ -47,6 +51,8 @@ stages:
       - [## Summary for downstream]
       - [## 完整性声明, ## Anti-Cherry-Pick Declaration]
     require_verify: true
+    permission: workspace-write
+    tools: code-mode
     gate: user_approval
     on_fail: implementing
     post_stage:
@@ -61,6 +67,8 @@ stages:
     output: lessons-draft.md
     sections: []
     require_verify: false
+    permission: read-only
+    tools: read+bash
     post_stage:
       - skill: skills/framework/state-checkpoint.md
         action: complete

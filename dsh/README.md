@@ -27,7 +27,6 @@ dsh/
 ├── install.js                   # DSH 目标安装器（复制 preset 目录到 ~/.dsh/.agent-presets/）
 ├── preset/
 │   └── harness/                 # Harness 模式 preset（目录格式：preset.yml + agent.cordis.yml + NOTICE）
-├── stage-schema.json            # 阶段 schema（单一真相源，与 gate-check 的 STAGE_REQUIREMENTS 同步）
 └── orchestrator.workflow.js     # 编排器原型（workflow 工具脚本模板）
 ```
 
@@ -43,7 +42,6 @@ dsh/
 ## Roadmap
 
 ### P0 — 编排器 + A/B 验证（当前阶段）
-- [x] dsh/stage-schema.json（阶段 schema 单一真相源）
 - [x] dsh/orchestrator.workflow.js（通用编排器原型：bootstrap 解析 YAML → 逐阶段子代理 → schema 门禁 → on_fail 回退）
 - [x] dsh/preset/harness/（preset 目录：preset.yml + agent.cordis.yml + NOTICE，基于 standard 适配，含 delegation 组）+ dsh/install.js
 - [x] **A/B 实验**（2026-08-18，taskflow 看板筛选）：完整报告见 [ab-experiment-report.md](ab-experiment-report.md)。结论：编排流审查更严（独立上下文无锚定偏差）、复盘翻倍、编排器上下文显著更轻、证据链两流均稳 → **编排器作为 DSH 默认执行模型优先落地**
@@ -79,5 +77,4 @@ dsh/
 
 - 本分支基于 main（含 v0.4 验证命令项目化）
 - main 分支继续维护跨 CLI 通用层（Qoder/Claude/Codex + hooks）
-- 本分支的 stage-schema.json 与 hooks/gate-check.js 的 STAGE_REQUIREMENTS 需保持同步（gate-check 注释已标注）
 - 通用层的改进合回 main 后，本分支 rebase 或 merge 跟进

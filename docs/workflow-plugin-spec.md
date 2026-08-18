@@ -106,5 +106,5 @@ verify:
 ## 6. 与 DSH 的关系
 
 - 本规范是**通用层**能力（main 分支），不依赖 DSH 环境
-- DSH 的 `stage-schema.json` 内容已迁入 workflow.yaml（sections/permission/tools），stage-schema 保留仅供 DSH 消费（标注 deprecated）
+- DSH 编排器与确定性门禁从工作流插件包读取定义（sections/permission/tools/verify 均来自 workflow.yaml）——`dsh/stage-schema.json` 已删除，数据迁入插件包，单一真相源不分裂
 - DSH preset 可消费工作流插件包（可选适配，非必需）

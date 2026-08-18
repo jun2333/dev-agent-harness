@@ -19,6 +19,8 @@ stages:
     output: [tech-selection.md, project-standards.md]
     sections: []
     require_verify: false
+    permission: workspace-write
+    tools: code-mode
     gate: user_approval
     post_stage:
       - skill: skills/framework/state-checkpoint.md
@@ -32,6 +34,8 @@ stages:
     output: lessons-draft.md
     sections: []
     require_verify: false
+    permission: read-only
+    tools: read+bash
     post_stage:
       - skill: skills/framework/state-checkpoint.md
         action: save
@@ -43,6 +47,8 @@ stages:
     output: changes.md
     sections: []
     require_verify: false
+    permission: workspace-write
+    tools: bash
     gate: user_approval
     optional: true
     post_stage:

@@ -5,7 +5,9 @@
 //       args 传入 { root: <目标项目绝对路径>, workflowName: "feature|bugfix|...", taskId: "task-xxx" }
 //
 // 设计（与讨论结论一致）：
-//   - 阶段定义单一真相源 = .harness/workflows/*.yaml（本脚本不重复定义阶段，由 bootstrap 子代理解析）
+//   - 阶段定义单一真相源 = 工作流插件包 .harness/workflows/{name}/workflow.yaml
+//     （含 stages/sections/require_verify/gate/permission/tools；项目层 knowledge/plugins/{name}/ 优先，
+//      由 bootstrap 子代理解析；dsh/stage-schema.json 已废弃删除，不再作为数据源）
 //   - 每阶段一个干净上下文的子代理：prompt 只含 阶段 skill + 上游产出文件 + 输出模板 + JSON 摘要规格
 //   - 数据级门禁 = agent() 的 schema 校验（子代理必须返回 JSON 摘要，sections_ok 必须为 true）
 //   - 流程级门禁（gate: user_approval）由主代理在 workflow 返回后用 ask_user_question 执行
@@ -38,9 +40,11 @@ const stageResultSchema = {
 phase('解析工作流');
 
 const parsed = await agent(
-  `你是 harness 编排引导。请读取 ${root}/.harness/workflows/${workflowName}.yaml 和 ` +
-    `${root}/.harness/dsh/stage-schema.json（阶段 schema）。返回该工作流的阶段列表：` +
-    `每个阶段含 { name, skill, input, output, gate, on_fail }（字段来自 YAML，input 转数组）。`,
+  `你是 harness 编排引导。请读取工作流插件包定义（项目层优先，其次通用层）：` +
+    `${root}/knowledge/plugins/${workflowName}/workflow.yaml（如存在），否则 ` +
+    `${root}/.harness/workflows/${workflowName}/workflow.yaml。` +
+    `返回该工作流的阶段列表：每个阶段含 { name, skill, input, output, sections, gate, on_fail, ` +
+    `require_verify, permission, tools }（字段来自 workflow.yaml，input 转数组）。`,
   {
     label: 'bootstrap: parse workflow',
     phase: '解析工作流',
