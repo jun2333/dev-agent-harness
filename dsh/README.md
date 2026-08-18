@@ -44,8 +44,8 @@ dsh/
 - [x] dsh/stage-schema.json（阶段 schema 单一真相源）
 - [x] dsh/orchestrator.workflow.js（通用编排器原型：bootstrap 解析 YAML → 逐阶段子代理 → schema 门禁 → on_fail 回退）
 - [x] dsh/preset/harness.preset.md（草案）+ dsh/install.js
+- [x] **A/B 实验**（2026-08-18，taskflow 看板筛选）：完整报告见 [ab-experiment-report.md](ab-experiment-report.md)。结论：编排流审查更严（独立上下文无锚定偏差）、复盘翻倍、编排器上下文显著更轻、证据链两流均稳 → **编排器作为 DSH 默认执行模型优先落地**
 - [ ] **验证项**（启用前必做）：preset 实际格式 / 子代理沙箱权限 / subagent+workflow+ask_user_question 工具可用性 / 子代理 cwd
-- [ ] A/B 实验：同一真实任务，单会话流程 vs 编排流程，对比返工次数、读取文件量、用时、产出质量
 
 ### P1 — 证据链与双轨审查
 - [ ] verify 证据作为编排器 schema 校验项（verify_evidence 字段接入）
