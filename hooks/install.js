@@ -12,7 +12,9 @@
  *   qoder     -> <root>/.qoder/settings.json（项目）或 ~/.qoder-cn/settings.json（用户）
  *   claude    -> <root>/.claude/settings.json（项目）或 ~/.claude/settings.json（用户）
  *   codex     -> <root>/.codex/config.toml（项目）或 ~/.codex/config.toml（用户）
- *   workbuddy -> <root>/.codebuddy/settings.json（项目）或 ~/.workbuddy/settings.json（用户）[WorkBuddy/CodeBuddy 桌面版，hook 契约与 Claude Code 同构]
+ *   workbuddy -> ~/.workbuddy/settings.json（仅用户级）[WorkBuddy/CodeBuddy 桌面版，hook 契约与 Claude Code 同构；
+ *                实测（2026-08-18）WorkBuddy 只加载用户级配置，项目级 <root>/.workbuddy/settings.json 不读取，
+ *                故安装时强制按 --scope=user 处理（绝对路径）]
  *   codebuddy -> 同上（CodeBuddy CLI，配置在 ~/.codebuddy/settings.json）
  *
  * 注：workbuddy / codebuddy 与 Claude Code 共享同一套 hook 契约（事件名 + stdin JSON + exit 2 阻断），
@@ -217,9 +219,14 @@ function main() {
         filePath = scope === 'user' ? path.join(home, '.claude', 'settings.json') : path.join(root, '.claude', 'settings.json');
         result = writeJsonConfig(filePath, jsonTemplate);
       } else if (cli === 'workbuddy' || cli === 'codebuddy') {
+        // WorkBuddy/CodeBuddy 实测只读取用户级配置（<root>/.workbuddy/settings.json 项目级不加载），
+        // 因此强制注册到用户级（绝对路径）。脚本自身按 .harness 根判定，跨项目为 no-op，不会误伤。
         const base = cli === 'workbuddy' ? '.workbuddy' : '.codebuddy';
-        filePath = scope === 'user' ? path.join(home, base, 'settings.json') : path.join(root, base, 'settings.json');
-        result = writeJsonConfig(filePath, jsonTemplate);
+        filePath = path.join(home, base, 'settings.json');
+        result = writeJsonConfig(filePath, buildJsonHooks('user'));
+        if (scope !== 'user') {
+          console.log(`  [注意] ${cli} 仅支持用户级 hook（项目级配置不生效），已自动改用 --scope=user`);
+        }
       } else {
         filePath = scope === 'user' ? path.join(home, '.codex', 'config.toml') : path.join(root, '.codex', 'config.toml');
         result = writeTomlConfig(filePath, tomlContent);
