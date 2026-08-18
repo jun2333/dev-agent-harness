@@ -9,9 +9,14 @@
  *   node .harness/hooks/install.js --scope=user    # 注册到用户级配置（所有项目生效）
  *
  * 支持的 CLI：
- *   qoder   -> <root>/.qoder/settings.json（项目）或 ~/.qoder-cn/settings.json（用户）
- *   claude  -> <root>/.claude/settings.json（项目）或 ~/.claude/settings.json（用户）
- *   codex   -> <root>/.codex/config.toml（项目）或 ~/.codex/config.toml（用户）
+ *   qoder     -> <root>/.qoder/settings.json（项目）或 ~/.qoder-cn/settings.json（用户）
+ *   claude    -> <root>/.claude/settings.json（项目）或 ~/.claude/settings.json（用户）
+ *   codex     -> <root>/.codex/config.toml（项目）或 ~/.codex/config.toml（用户）
+ *   workbuddy -> <root>/.codebuddy/settings.json（项目）或 ~/.workbuddy/settings.json（用户）[WorkBuddy/CodeBuddy 桌面版，hook 契约与 Claude Code 同构]
+ *   codebuddy -> 同上（CodeBuddy CLI，配置在 ~/.codebuddy/settings.json）
+ *
+ * 注：workbuddy / codebuddy 与 Claude Code 共享同一套 hook 契约（事件名 + stdin JSON + exit 2 阻断），
+ *     因此直接复用 JSON_HOOKS 模板，无需为不同宿主复制 hook 逻辑。
  *
  * 合并策略：读现有配置 -> 按 hook name 去重合并 -> 备份原文件 -> 写回。
  * 一组脚本（hooks/*.js）随 submodule 分发，install.js 按 CLI 生成对应注册格式。
@@ -26,27 +31,34 @@ const REL = p => path.relative(process.cwd(), p) || p;
 
 // ---------------------------------------------------------------- 配置模板
 
-const JSON_HOOKS = {
-  PostToolUse: [
-    {
-      matcher: 'Bash|Write|Edit|apply_patch',
-      hooks: [{ type: 'command', command: `node ${REL(path.join(HOOKS_DIR, 'post-tool-log.js'))}`, name: 'harness-post-tool-log', async: true, statusMessage: 'harness: 记录工具调用' }],
-    },
-    {
-      matcher: 'Bash',
-      hooks: [{ type: 'command', command: `node ${REL(path.join(HOOKS_DIR, 'check-verify.js'))}`, name: 'harness-check-verify', timeout: 10, statusMessage: 'harness: 检查验证命令' }],
-    },
-    {
-      matcher: 'Write|Edit',
-      hooks: [{ type: 'command', command: `node ${REL(path.join(HOOKS_DIR, 'gate-check.js'))}`, name: 'harness-gate-check', timeout: 10, statusMessage: 'harness: 阶段产出校验' }],
-    },
-  ],
-  Stop: [
-    {
-      hooks: [{ type: 'command', command: `node ${REL(path.join(HOOKS_DIR, 'gate-check.js'))}`, name: 'harness-gate-check-stop', timeout: 10, statusMessage: 'harness: 收尾校验' }],
-    },
-  ],
-};
+// 同一套 hook 适配所有宿主：事件名/matcher/脚本均与 Claude Code 同构。
+// user 级用绝对路径（跨项目可用），project 级用相对路径（harness 作为 submodule 内嵌项目）。
+function buildJsonHooks(scope) {
+  const cmd = script => scope === 'user'
+    ? `node ${path.join(HOOKS_DIR, script)}`
+    : `node ${REL(path.join(HOOKS_DIR, script))}`;
+  return {
+    PostToolUse: [
+      {
+        matcher: 'Bash|Write|Edit|apply_patch',
+        hooks: [{ type: 'command', command: cmd('post-tool-log.js'), name: 'harness-post-tool-log', async: true, statusMessage: 'harness: 记录工具调用' }],
+      },
+      {
+        matcher: 'Bash',
+        hooks: [{ type: 'command', command: cmd('check-verify.js'), name: 'harness-check-verify', timeout: 10, statusMessage: 'harness: 检查验证命令' }],
+      },
+      {
+        matcher: 'Write|Edit',
+        hooks: [{ type: 'command', command: cmd('gate-check.js'), name: 'harness-gate-check', timeout: 10, statusMessage: 'harness: 阶段产出校验' }],
+      },
+    ],
+    Stop: [
+      {
+        hooks: [{ type: 'command', command: cmd('gate-check.js'), name: 'harness-gate-check-stop', timeout: 10, statusMessage: 'harness: 收尾校验' }],
+      },
+    ],
+  };
+}
 
 // Codex 用 TOML，事件键 PascalCase，数组表结构
 function tomlHookLines() {
@@ -78,6 +90,8 @@ function detectCLIs() {
   if (fs.existsSync(path.join(home, '.qoder-cn'))) found.push('qoder');
   if (fs.existsSync(path.join(home, '.claude'))) found.push('claude');
   if (fs.existsSync(path.join(home, '.codex'))) found.push('codex');
+  if (fs.existsSync(path.join(home, '.workbuddy'))) found.push('workbuddy');
+  if (fs.existsSync(path.join(home, '.codebuddy'))) found.push('codebuddy');
   if (found.length === 0) {
     // 兜底：按 PATH 检测命令
     const pathDirs = (process.env.PATH || '').split(':');
@@ -183,13 +197,13 @@ function main() {
     targets = [cliFilter];
   }
   if (targets.length === 0) {
-    console.error('未检测到任何支持的 CLI（qoder / claude / codex），注册不了 hook');
+    console.error('未检测到任何支持的 CLI（qoder / claude / codex / workbuddy / codebuddy），注册不了 hook');
     process.exit(1);
   }
 
   const root = process.cwd();
   const home = os.homedir();
-  const jsonTemplate = JSON_HOOKS;
+  const jsonTemplate = buildJsonHooks(scope);
   const tomlContent = tomlHookLines();
   const report = [];
 
@@ -201,6 +215,10 @@ function main() {
         result = writeJsonConfig(filePath, jsonTemplate);
       } else if (cli === 'claude') {
         filePath = scope === 'user' ? path.join(home, '.claude', 'settings.json') : path.join(root, '.claude', 'settings.json');
+        result = writeJsonConfig(filePath, jsonTemplate);
+      } else if (cli === 'workbuddy' || cli === 'codebuddy') {
+        const base = cli === 'workbuddy' ? '.workbuddy' : '.codebuddy';
+        filePath = scope === 'user' ? path.join(home, base, 'settings.json') : path.join(root, base, 'settings.json');
         result = writeJsonConfig(filePath, jsonTemplate);
       } else {
         filePath = scope === 'user' ? path.join(home, '.codex', 'config.toml') : path.join(root, '.codex', 'config.toml');
