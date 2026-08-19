@@ -127,14 +127,6 @@ function cmdInit(root, name, asName, force) {
     fs.cpSync(path.join(templateDir, entry), path.join(targetDir, entry), { recursive: true });
   }
 
-  // 复制插件专属 skill：模板引用 `skills/{name}/...` 且 .harness/skills/{name}/ 存在 →
-  // 视为插件自带 skill，复制到项目副本 knowledge/plugins/{target}/skills/（插件自包含，不依赖 .harness）
-  const tplOwnSkillDir = path.join(root, '.harness', 'skills', name);
-  if (fs.existsSync(tplOwnSkillDir)) {
-    fs.cpSync(tplOwnSkillDir, path.join(targetDir, 'skills'), { recursive: true });
-    console.log(`  [插件 skill] 已复制插件专属 skill：.harness/skills/${name}/ → knowledge/plugins/${target}/skills/`);
-  }
-
   // 记录上游模板来源（sync 溯源用），插到文件头
   {
     const content = fs.readFileSync(targetFile, 'utf8');
@@ -172,9 +164,10 @@ function cmdInit(root, name, asName, force) {
 
 /**
  * 路径规范化（init 与 sync 共享）：
- *   1) 插件专属 skill `skills/{name}/...` → 项目内 `knowledge/plugins/{target}/skills/...`
- *   2) 框架级/共享 skill 的过时 .md 引用 → /SKILL.md（保留 .harness 引用）
- *   3) 校验修正后是否还有无效引用
+ *   所有 skill 都是 harness 通用层（.harness/skills/）或项目层（knowledge/skills/）——
+ *   不存在"插件专属 skill"（插件只引用，不复制 skill）。
+ *   1) 隐式 `skills/...` 引用 → 显式 `.harness/skills/.../SKILL.md`（相对项目根，任何解析器可解析）
+ *   2) 校验修正后是否还有无效引用
  */
 function normalizeSkillPaths(root, targetFile, target, name) {
   const lines = fs.readFileSync(targetFile, 'utf8').split('\n');
@@ -184,19 +177,7 @@ function normalizeSkillPaths(root, targetFile, target, name) {
     if (!m) return line;
     const ref = m[2];
 
-    // 1) 插件专属 skill：`skills/{name}/...` → 项目内 `knowledge/plugins/{target}/skills/...`
-    const ownPrefix = `skills/${name}/`;
-    if (ref.startsWith(ownPrefix)) {
-      const rel = ref.slice(ownPrefix.length).replace(/\.md$/, '');
-      const projRef = `knowledge/plugins/${target}/skills/${rel}/SKILL.md`;
-      if (fs.existsSync(path.join(root, projRef))) {
-        fixed++;
-        return `${m[1]}${projRef}`;
-      }
-    }
-
-    // 2) 框架级/共享 skill 的过时 .md 引用 → 显式 `.harness/` 前缀（相对项目根，任何解析器可解析）
-    //    （原 `skills/...` 形式依赖 bridge 的隐式前缀规则，不稳健）
+    // 隐式 `skills/...` 的过时 .md 引用 → 显式 `.harness/skills/.../SKILL.md`
     if (ref.endsWith('.md') && !ref.startsWith('knowledge/') && !ref.startsWith('.harness/')) {
       const dir = ref.replace(/\.md$/, '');
       const skMd = path.join(root, '.harness', dir, 'SKILL.md');
@@ -297,16 +278,8 @@ function cmdSync(root, name) {
 
   console.log(`[workflow-init] sync ${name}（上游模板 ${upstreamName} → 项目副本）`);
 
-  // 1) 插件专属 skill 同步：模板 .harness/skills/{upstreamName}/ → 项目副本 skills/（缺则补）
+  // 路径规范化自动修正（隐式 skills/... → 显式 .harness/.../SKILL.md）
   const projectFile = findWorkflowFile(root, name).file;
-  const targetDir = path.dirname(projectFile);
-  const tplOwnSkillDir = path.join(root, '.harness', 'skills', upstreamName);
-  if (fs.existsSync(tplOwnSkillDir) && !fs.existsSync(path.join(targetDir, 'skills'))) {
-    fs.cpSync(tplOwnSkillDir, path.join(targetDir, 'skills'), { recursive: true });
-    console.log(`  [插件 skill] 已同步插件专属 skill → ${path.relative(root, path.join(targetDir, 'skills'))}/`);
-  }
-
-  // 2) 路径规范化自动修正（.md → /SKILL.md、插件专属 → 项目内）
   normalizeSkillPaths(root, projectFile, name, name);
 
   // 字段级差异输出（added 需补齐，kept 为项目定制保留；agent/用户按提示处理）
