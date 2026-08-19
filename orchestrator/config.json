@@ -1,0 +1,6 @@
+{
+  "subagent": "bridge",
+  "headless_cli": "codebuddy",
+  "max_rework": 2,
+  "note": "subagent: bridge=LLM 中转（主 agent 调 Agent 工具）；headless=脚本直调（spawn codebuddy -p）。max_rework: 单阶段失败重做上限，超过后停等人工介入"
+}

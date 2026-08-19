@@ -25,14 +25,8 @@ const fs = require('fs');
 const path = require('path');
 const { readStdin, findHarnessRoot, emitReminder, exitBlock, exitOk } = require('./lib.js');
 const { loadWorkflowDefinition, resolveVerifyCommands, listWorkflows } = require('../tools/workflow-lib.js');
-
-function readJson(file) {
-  try {
-    return JSON.parse(fs.readFileSync(file, 'utf8'));
-  } catch {
-    return null;
-  }
-}
+// 产出物机械检查的单一真相源（gate-check 与编排器 validate 共用）
+const { checkStage, checkVerifyEvidence, readJson } = require('../tools/stage-check.js');
 
 /** 从 Write/Edit 的 file_path 解析 task-id（.harness/workspace/{task-id}/{file}） */
 function taskIdFromPath(root, filePath) {
@@ -59,88 +53,6 @@ function latestCheckpoint(root) {
     }
   }
   return latest;
-}
-
-function checkStage(root, taskDir, checkpoint, wfDef, contentOverride, verifyCommands) {
-  const stage = checkpoint.current_stage;
-  const st = wfDef && wfDef.stages[stage];
-  const output = (checkpoint.stage_outputs && checkpoint.stage_outputs[stage]) || (st && st.output);
-  // 未知阶段 / 无插件包定义 / 未声明 sections → 不做硬校验（兼容旧任务与 optional 阶段）
-  if (!st || !Array.isArray(st.sections)) return [];
-
-  const failures = [];
-  const outputPath = path.join(root, '.harness', 'workspace', taskDir, output);
-
-  // contentOverride：PreToolUse 时由 tool_input 提供的待写入内容（文件尚未落盘）
-  let content = contentOverride;
-  if (content === null || content === undefined) {
-    if (!fs.existsSync(outputPath)) {
-      failures.push(`产出物缺失：${path.join('workspace', taskDir, output)}`);
-      return failures;
-    }
-    content = fs.readFileSync(outputPath, 'utf8');
-  }
-
-  for (const group of st.sections) {
-    if (!Array.isArray(group) || group.length === 0) continue;
-    if (!group.some((sec) => content.includes(sec))) {
-      failures.push(
-        `产出物缺少必含区块（${path.join('workspace', taskDir, output)}）：${group.join(' 或 ')}`
-      );
-    }
-  }
-
-  // require_verify 阶段必须有 verify 证据链（他证）
-  if (st.require_verify) {
-    failures.push(...checkVerifyEvidence(root, taskDir, verifyCommands));
-  }
-
-  return failures;
-}
-
-/** verify 证据校验：报告存在 + passed + 命令与工作流 verify 解析命令集对账（他证） */
-function checkVerifyEvidence(root, taskDir, verifyCommands) {
-  const failures = [];
-  const verifyReport = path.join(root, '.harness', 'workspace', taskDir, 'verify', 'verification-result.json');
-  const verifyData = readJson(verifyReport);
-  if (!verifyData) {
-    failures.push(
-      `缺少 verify 证据：${path.join('workspace', taskDir, 'verify', 'verification-result.json')} 不存在。` +
-        '验证必须通过 `node .harness/tools/verify.js run` 执行（命令来自工作流 verify 声明），结果才会落盘为证据。'
-    );
-    return failures;
-  }
-  if (verifyData.overall_status !== 'passed') {
-    failures.push(`verify 证据显示未通过：overall_status = ${verifyData.overall_status}`);
-  }
-
-  if (verifyCommands) {
-    const reportCommands = (verifyData.commands || [])
-      .map((c) => (typeof c === 'string' ? c : c && c.command))
-      .filter(Boolean);
-
-    const ran = new Set(reportCommands);
-    const notRun = verifyCommands.filter((c) => !ran.has(c));
-    if (notRun.length > 0) {
-      failures.push(
-        `verify 证据未覆盖工作流声明的命令：${notRun.join(', ')}（声明命令必须全量执行，不允许只跑部分）`
-      );
-    }
-    const extra = reportCommands.filter((c) => !verifyCommands.includes(c));
-    if (extra.length > 0) {
-      failures.push(
-        `verify 证据包含工作流声明外的命令：${extra.join(', ')}（命令只能来自工作流 verify checks，如需新增请修改 workflow.yaml）`
-      );
-    }
-  }
-
-  if (!verifyData.config_source) {
-    failures.push(
-      'verify 证据缺少 config_source 字段：请使用新版 `node .harness/tools/verify.js run`（命令来自工作流声明/项目配置）重新生成证据。'
-    );
-  }
-
-  return failures;
 }
 
 function main() {
@@ -188,11 +100,12 @@ function main() {
   const checkpoint = readJson(path.join(taskDir, 'checkpoint.json'));
   if (!checkpoint) exitOk();
 
-  const wfDef = loadWorkflowDefinition(root, checkpoint.workflow);
-  if (!wfDef && checkpoint.workflow) {
-    process.stderr.write(
-      `[harness gate] 未找到工作流插件包定义：.harness/workflows/${checkpoint.workflow}/workflow.yaml（已降级，不阻塞）\n`
-    );
+  let wfDef = null;
+  try {
+    wfDef = loadWorkflowDefinition(root, checkpoint.workflow);
+  } catch (e) {
+    // 插件缺失时降级不阻塞写入（gate-check 是兜底，避免旧任务/未复制插件时卡死）
+    process.stderr.write(`[harness gate] 工作流插件包加载失败：${e.message}（已降级，不阻塞写入）\n`);
   }
 
   // 解析 verify 命令集（require_verify 阶段用）；解析失败按门禁失败处理
@@ -208,7 +121,19 @@ function main() {
     }
   }
 
-  const failures = checkStage(root, taskId, checkpoint, wfDef, contentOverride, verifyCommands);
+  const stage = checkpoint.current_stage;
+  const st = wfDef && wfDef.stages[stage];
+  const output = (checkpoint.stage_outputs && checkpoint.stage_outputs[stage]) || (st && st.output);
+  const failures = checkStage({ root, taskId, stage, wfDef, output, contentOverride, verifyCommands });
+
+  // 强制编排（过渡期软提示）：Stop 时若任务非编排器驱动（checkpoint 无 executor: orchestrator），提醒改走编排器
+  if (event === 'Stop' && checkpoint.executor !== 'orchestrator') {
+    emitReminder(
+      'Stop',
+      '[harness] 此任务未走编排器（checkpoint 缺 executor: orchestrator）。编排器是任务驱动的目标路径（流程状态机在程序里），建议改用编排器；CLI 版仅限简单任务。见 docs/orchestrator-design.md「强制进编排层」。'
+    );
+  }
+
   if (failures.length > 0) {
     const detail = failures.map((f) => `- ${f}`).join('\n');
     if (event === 'Stop') {
@@ -232,8 +157,9 @@ module.exports = {
   listWorkflows,
   taskIdFromPath,
   latestCheckpoint,
-  checkStage,
+  checkStage,        // 从 tools/stage-check.js 再导出（共享单一真相源）
   checkVerifyEvidence,
+  readJson,
 };
 
 if (require.main === module) main();

@@ -13,6 +13,7 @@ pre_task:
 
 stages:
   - name: designing
+    executor: subagent
     skill: skills/skill-creation/skill-design.md
     input: task.md
     output: design.md
@@ -29,6 +30,7 @@ stages:
       - action: skill-log
 
   - name: implementing
+    executor: subagent
     skill: skills/skill-creation/skill-implement.md
     input: [task.md, design.md]
     output: changes.md
@@ -44,6 +46,7 @@ stages:
       - action: skill-log
 
   - name: testing
+    executor: subagent
     skill: skills/skill-creation/skill-test.md
     input: [task.md, design.md, changes.md]
     output: test-report.md
@@ -61,6 +64,7 @@ stages:
       - action: skill-log
 
   - name: reflecting
+    executor: inline
     skill: skills/framework/reflecting.md
     sub_command: reflect
     input: [task.md, design.md, changes.md, test-report.md, execution-log.md]

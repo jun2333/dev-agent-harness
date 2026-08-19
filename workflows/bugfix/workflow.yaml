@@ -14,7 +14,8 @@ pre_task:
 
 stages:
   - name: task-planning
-    skill: knowledge/skills/task-planning/skill.md
+    executor: subagent
+    skill: knowledge/skills/task-planning/SKILL.md
     input: task.md
     output: task-plan.md
     sections:
@@ -32,7 +33,8 @@ stages:
         action: run
 
   - name: implementing
-    skill: knowledge/skills/implementing/skill.md
+    executor: subagent
+    skill: knowledge/skills/implementing/SKILL.md
     input: [task.md, task-plan.md]
     output: changes.md
     sections:
@@ -49,7 +51,8 @@ stages:
         action: run
 
   - name: testing
-    skill: knowledge/skills/testing/skill.md
+    executor: subagent
+    skill: knowledge/skills/testing/SKILL.md
     input: [task.md, task-plan.md, changes.md]
     output: test-report.md
     sections:
@@ -68,7 +71,8 @@ stages:
         action: run
 
   - name: reviewing
-    skill: knowledge/skills/reviewing/skill.md
+    executor: subagent
+    skill: knowledge/skills/reviewing/SKILL.md
     input: [changes.md, test-report.md]
     output: review-report.md
     sections:
@@ -87,6 +91,7 @@ stages:
         action: run
 
   - name: reflecting
+    executor: inline
     skill: skills/framework/reflecting.md
     sub_command: reflect
     input: [task.md, task-plan.md, test-report.md, review-report.md, execution-log.md]
@@ -100,7 +105,8 @@ stages:
         action: save
 
   - name: git-operations
-    skill: knowledge/skills/git-operations/skill.md
+    executor: inline
+    skill: knowledge/skills/git-operations/SKILL.md
     sub_command: commit
     input: [changes.md, review-report.md]
     output: changes.md

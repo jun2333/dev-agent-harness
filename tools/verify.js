@@ -97,6 +97,11 @@ function resolveCommands(config, workflowName, rootDir) {
     return cmds;
   }
   // 无 --workflow：v1 兼容（commands 数组作为默认命令集）；v2 对象则必须用 --workflow
+  if (!config) {
+    throw new Error(
+      '未找到 knowledge/verify.config.json，且未指定 --workflow——验证命令来源必须是项目配置（命令池）或工作流声明（插件包 check 脚本），LLM 不允许自选'
+    );
+  }
   if (Array.isArray(config.commands)) return config.commands;
   throw new Error(
     'verify.config.json 使用 v2 命令池（commands 为对象），必须通过 --workflow <name> 指定工作流来解析 verify.checks'
@@ -108,9 +113,9 @@ function runVerification(config, configPath, rootDir, outputDir, reportPath, com
   const results = {
     schema_version: RESULT_SCHEMA,
     generated_at: new Date().toISOString(),
-    config_source: path.relative(rootDir, configPath),
-    config_schema_version: config.schema_version || CONFIG_SCHEMA,
-    timeout_ms: config.timeout_ms || 300000,
+    config_source: configPath ? path.relative(rootDir, configPath) : 'workflow-plugin',
+    config_schema_version: (config && config.schema_version) || CONFIG_SCHEMA,
+    timeout_ms: (config && config.timeout_ms) || 300000,
     commands: [],
     overall_status: 'passed',
     overall_reason: null,
@@ -119,7 +124,7 @@ function runVerification(config, configPath, rootDir, outputDir, reportPath, com
   fs.mkdirSync(outputDir, { recursive: true });
   fs.mkdirSync(path.dirname(reportPath), { recursive: true });
 
-  const timeoutMs = config.timeout_ms || 300000;
+  const timeoutMs = (config && config.timeout_ms) || 300000;
   // 兼容测试：不传 commandsOverride 时用 config.commands（v1 数组）
   const cmds = commandsOverride || (Array.isArray(config.commands) ? config.commands : []);
 
@@ -222,15 +227,19 @@ if (!outputDirArg || !reportPathArg) {
 }
 
 try {
+  // verify.config.json 是可选的：workflow 用纯插件包 check 脚本时不依赖命令池
+  // （resolveCommands 里：无配置 + 无 --workflow 会报错；命令池 key 解析失败也会报错）
   const found = findVerifyConfig(rootArg || process.cwd());
-  if (!found) {
-    console.error(
-      `[harness verify] 未找到 ${CONFIG_REL}：请先运行 knowledge-init 生成项目验证配置（命令是项目拥有的，不允许 LLM 自选）。`
-    );
-    process.exit(1);
+  let config = null;
+  let configPath = null;
+  let rootDir = rootArg ? path.resolve(rootArg) : process.cwd();
+  if (found) {
+    configPath = found.configPath;
+    rootDir = found.rootDir;
+    config = readConfig(configPath);
+  } else {
+    console.warn(`[harness verify] 未找到 ${CONFIG_REL}：若工作流 verify.checks 只用插件包 check 脚本可继续；命令池 key 需要此配置。`);
   }
-  const { configPath, rootDir } = found;
-  const config = readConfig(configPath);
 
   const outputDir = path.isAbsolute(outputDirArg)
     ? outputDirArg
@@ -241,7 +250,6 @@ try {
 
   const cmds = resolveCommands(config, workflowArg, rootDir);
   const results = runVerification(config, configPath, rootDir, outputDir, reportPath, cmds);
-
   console.log(`Verification completed: ${results.overall_status}`);
   console.log(`Commands run (from ${results.config_source}): ${results.commands.length}`);
   for (const c of results.commands) {

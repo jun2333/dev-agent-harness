@@ -58,7 +58,8 @@ description: 项目复盘 + 经验收集。阶段一自动触发：workflow 最�
 
 ### 确定性输入（从以下文件读取）
 - workspace/{task-id}/lessons-draft.md
-- workspace/{task-id}/human-review-feedback.md（如存在；人类审核反馈，见 templates/human-review-feedback.md）
+- workspace/{task-id}/review-report.md 的「## 人工反馈」区块（人类审核反馈已内嵌在审查报告末尾，优先读取）
+- workspace/{task-id}/human-review-feedback.md（如存在，兼容旧格式）
 - 用户指定的编号（如"收集第 1、3 条"）
 
 ### 语义判断（基于输入推断）
@@ -68,12 +69,12 @@ description: 项目复盘 + 经验收集。阶段一自动触发：workflow 最�
 - 人类反馈中「建议沉淀 = 是」的条目是否值得转为经验（基于问题的影响面和复用概率）
 
 ### 执行步骤
-1. 读取 lessons-draft.md 与 human-review-feedback.md（如存在）
+1. 读取 lessons-draft.md；读取 review-report.md 的「## 人工反馈」区块（无则查 human-review-feedback.md 兼容）
 2. 根据用户指定的编号，将 lessons-draft 对应条目标题加上 `✅` 标记
 3. 筛选带 `✅` 的经验，生成 frontmatter（tags, confidence, created, use_count: 1, source_task, status, invalidation_condition, source_refs）。`use_count` 初始值固定为 **1**——经验因实际使用踩坑而被收集，收集即首次使用；后续由 task-planning 阶段在命中时递增（引用即消费）
-4. 将 human-review-feedback.md 中「建议沉淀 = 是」的条目转为经验条目，frontmatter 增加 `source: human-review`，与步骤 3 的条目一起写入 knowledge/lessons/ 目录
+4. 将人工反馈区块中「建议沉淀 = 是」的条目转为经验条目，frontmatter 增加 `source: human-review`，与步骤 3 的条目一起写入 knowledge/lessons/ 目录
 5. 更新 knowledge/_index.md（如需要）
-6. 清理已收集的草稿（lessons-draft.md 与已处理完的 human-review-feedback.md）
+6. 清理已收集的草稿（lessons-draft.md 与已处理完的反馈区块/兼容文件）
 
 ### 输出
 - knowledge/lessons/{id}-{title}.md（新增的经验文件，含 human-review 来源）

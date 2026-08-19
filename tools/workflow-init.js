@@ -54,7 +54,24 @@ function getArg(name) {
   return null;
 }
 
-/** 命令池 key 校验：返回 { missing: string[] }（内置 check 不算 key） */
+/** 直接解析工作流模板文件（模板源在 .harness/workflows/，不通过 findWorkflowFile——它只查项目层） */
+function parseWorkflowFile(file, fallbackName) {
+  const doc = yaml.parse(fs.readFileSync(file, 'utf8'));
+  const stages = {};
+  for (const s of Array.isArray(doc.stages) ? doc.stages : []) {
+    if (s && s.name) stages[s.name] = s;
+  }
+  return {
+    name: doc.name || fallbackName,
+    description: doc.description || '',
+    stages,
+    verify: doc.verify || { checks: [] },
+    pre_task: doc.pre_task || [],
+    post_task: doc.post_task || [],
+  };
+}
+
+/** 命令池 key 校验：返回 { missing: string[] }（内置 check + 插件自带 check 脚本不算 key） */
 function checkCommandPool(root, wfDef) {
   const checks = (wfDef && wfDef.verify && wfDef.verify.checks) || [];
   if (!Array.isArray(checks) || checks.length === 0) return { missing: [] };
@@ -63,21 +80,26 @@ function checkCommandPool(root, wfDef) {
   const poolKeys = new Set(pool && pool.commands && typeof pool.commands === 'object' && !Array.isArray(pool.commands)
     ? Object.keys(pool.commands)
     : []);
-  return { missing: checks.filter((c) => !builtin.has(c) && !poolKeys.has(c)) };
+  return {
+    missing: checks.filter((c) => {
+      if (builtin.has(c)) return false; // 框架内置 check
+      if (poolKeys.has(c)) return false; // 命令池 key
+      // 插件自带 check 脚本（模板目录 check/{c}.js 存在）→ 不依赖命令池，随插件复制
+      if (fs.existsSync(path.join(root, '.harness', 'workflows', wfDef.name, 'check', `${c}.js`))) return false;
+      return true;
+    }),
+  };
 }
 
 function cmdInit(root, name, asName, force) {
-  const found = findWorkflowFile(root, name);
-  if (!found) {
+  // 通用模板 = .harness/workflows/{name}/（模板源；findWorkflowFile 只查项目层，不用于模板）
+  const templateDir = path.join(root, '.harness', 'workflows', name);
+  const templateFile = path.join(templateDir, 'workflow.yaml');
+  if (!fs.existsSync(templateFile)) {
     console.error(`[workflow-init] 通用模板不存在：.harness/workflows/${name}/workflow.yaml`);
     process.exit(2);
   }
-  if (found.source !== 'harness') {
-    console.error(`[workflow-init] ${name} 已在项目层（${found.file}），init 只处理通用模板`);
-    process.exit(2);
-  }
 
-  const template = loadWorkflowDefinition(root, name);
   const target = asName || name;
   const targetDir = path.join(root, PROJECT_PLUGINS_DIR, target);
   const targetFile = path.join(targetDir, 'workflow.yaml');
@@ -85,6 +107,8 @@ function cmdInit(root, name, asName, force) {
     console.error(`[workflow-init] 项目层已存在 ${target}（${targetFile}），先 sync 或删除后再 init`);
     process.exit(2);
   }
+
+  const template = parseWorkflowFile(templateFile, name);
 
   // 命令池校验
   const { missing } = checkCommandPool(root, template);
@@ -97,9 +121,19 @@ function cmdInit(root, name, asName, force) {
     process.exit(2);
   }
 
-  // 复制模板
+  // 复制整个插件目录（workflow.yaml + check/ + templates/）
   fs.mkdirSync(targetDir, { recursive: true });
-  fs.copyFileSync(found.file, targetFile);
+  for (const entry of fs.readdirSync(templateDir)) {
+    fs.cpSync(path.join(templateDir, entry), path.join(targetDir, entry), { recursive: true });
+  }
+
+  // 复制插件专属 skill：模板引用 `skills/{name}/...` 且 .harness/skills/{name}/ 存在 →
+  // 视为插件自带 skill，复制到项目副本 knowledge/plugins/{target}/skills/（插件自包含，不依赖 .harness）
+  const tplOwnSkillDir = path.join(root, '.harness', 'skills', name);
+  if (fs.existsSync(tplOwnSkillDir)) {
+    fs.cpSync(tplOwnSkillDir, path.join(targetDir, 'skills'), { recursive: true });
+    console.log(`  [插件 skill] 已复制插件专属 skill：.harness/skills/${name}/ → knowledge/plugins/${target}/skills/`);
+  }
 
   // 记录上游模板来源（sync 溯源用），插到文件头
   {
@@ -121,14 +155,85 @@ function cmdInit(root, name, asName, force) {
     }
   }
 
-  console.log(`[workflow-init] ✓ 已实例化 ${name} → knowledge/plugins/${target}/workflow.yaml（source: project）`);
+  // 路径规范化（自动修正 + 校验）：把项目副本中过时的 `skills/{dir}/{name}.md` skill 引用
+  // 修正为 `skills/{dir}/{name}/SKILL.md`（标准 skill 格式），只改项目副本，不动模板源。
+  // 同时校验修正后是否还有无效引用。
+  normalizeSkillPaths(root, targetFile, target, name);
+
+  console.log(`[workflow-init] ✓ 已实例化 ${name} → knowledge/plugins/${target}/（source: project，含 check/templates）`);
   if (missing.length > 0) {
     console.log(`  [警告] 命令池缺失 key（已 --force 跳过校验）：${missing.join(', ')}`);
   } else if (template.verify && template.verify.checks && template.verify.checks.length > 0) {
     console.log(`  verify.checks: ${template.verify.checks.join(', ')}（命令池绑定已校验）`);
   }
-  console.log('  建议定制点（改项目副本）：verify.checks（绑定项目测试命令）/ 阶段增删 / gate / sections');
+  console.log('  建议定制点（改项目副本）：verify.checks（绑定项目测试命令）/ 阶段增删 / gate / sections / executor');
   console.log(`  下一步：编辑 ${targetFile} 完成项目定制`);
+}
+
+/**
+ * 路径规范化（init 与 sync 共享）：
+ *   1) 插件专属 skill `skills/{name}/...` → 项目内 `knowledge/plugins/{target}/skills/...`
+ *   2) 框架级/共享 skill 的过时 .md 引用 → /SKILL.md（保留 .harness 引用）
+ *   3) 校验修正后是否还有无效引用
+ */
+function normalizeSkillPaths(root, targetFile, target, name) {
+  const lines = fs.readFileSync(targetFile, 'utf8').split('\n');
+  let fixed = 0;
+  const outLines = lines.map((line) => {
+    const m = line.match(/^(\s*(?:-\s*)?skill:\s*)(\S+)\s*$/);
+    if (!m) return line;
+    const ref = m[2];
+
+    // 1) 插件专属 skill：`skills/{name}/...` → 项目内 `knowledge/plugins/{target}/skills/...`
+    const ownPrefix = `skills/${name}/`;
+    if (ref.startsWith(ownPrefix)) {
+      const rel = ref.slice(ownPrefix.length).replace(/\.md$/, '');
+      const projRef = `knowledge/plugins/${target}/skills/${rel}/SKILL.md`;
+      if (fs.existsSync(path.join(root, projRef))) {
+        fixed++;
+        return `${m[1]}${projRef}`;
+      }
+    }
+
+    // 2) 框架级/共享 skill 的过时 .md 引用 → /SKILL.md（保留 .harness 引用）
+    if (ref.endsWith('.md') && !ref.startsWith('knowledge/')) {
+      const dir = ref.replace(/\.md$/, '');
+      const skMd = path.join(root, '.harness', dir, 'SKILL.md');
+      const oldRef = path.join(root, '.harness', ref);
+      if (!fs.existsSync(oldRef) && fs.existsSync(skMd)) {
+        fixed++;
+        return `${m[1]}${dir}/SKILL.md`;
+      }
+    }
+    return line;
+  });
+  if (fixed > 0) {
+    fs.writeFileSync(targetFile, outLines.join('\n'));
+  }
+
+  // 修正后重新校验剩余无效引用
+  const finalPlugin = parseWorkflowFile(targetFile, target);
+  const issues = [];
+  for (const [sname, st] of Object.entries(finalPlugin.stages)) {
+    if (!st.skill) continue;
+    const candidates = [
+      path.join(root, st.skill.startsWith('knowledge/') ? '.' : '.harness', st.skill),
+      path.join(root, st.skill),
+    ];
+    if (!candidates.some((c) => fs.existsSync(c))) {
+      issues.push(`stage.${sname}.skill=${st.skill}（引用不存在）`);
+    }
+  }
+  if (fixed > 0) {
+    console.log(`  [路径规范化] 自动修正 ${fixed} 处 skill 引用（.md → /SKILL.md 或插件专属 → 项目内，项目副本）`);
+  }
+  if (issues.length > 0) {
+    console.log(`  [路径规范化] ${issues.length} 处 skill 引用仍无效（需人工处理）：`);
+    for (const i of issues) console.log(`    - ${i}`);
+  } else {
+    console.log('  [路径规范化] 全部 skill 引用有效');
+  }
+  return { fixed, issues };
 }
 
 /** 字段级 diff：返回 { added: string[], kept: string[] }（added=模板有项目没有，kept=项目定制保留） */
@@ -183,13 +288,25 @@ function cmdSync(root, name) {
     process.exit(2);
   }
 
-  const template = loadWorkflowDefinition(root, upstreamName);
+  const template = parseWorkflowFile(templateFile, upstreamName);
   const project = loadWorkflowDefinition(root, name);
   const { added, kept } = diffWorkflow(template, project);
 
-  // 补齐"模板有而项目没有"的字段（重新渲染模板文件的这些部分太复杂，直接提示 + 提供参考）
-  // 简化实现：added 字段以模板文件为参考，agent 按提示手工补齐（工具输出差异清单）
   console.log(`[workflow-init] sync ${name}（上游模板 ${upstreamName} → 项目副本）`);
+
+  // 1) 插件专属 skill 同步：模板 .harness/skills/{upstreamName}/ → 项目副本 skills/（缺则补）
+  const projectFile = findWorkflowFile(root, name).file;
+  const targetDir = path.dirname(projectFile);
+  const tplOwnSkillDir = path.join(root, '.harness', 'skills', upstreamName);
+  if (fs.existsSync(tplOwnSkillDir) && !fs.existsSync(path.join(targetDir, 'skills'))) {
+    fs.cpSync(tplOwnSkillDir, path.join(targetDir, 'skills'), { recursive: true });
+    console.log(`  [插件 skill] 已同步插件专属 skill → ${path.relative(root, path.join(targetDir, 'skills'))}/`);
+  }
+
+  // 2) 路径规范化自动修正（.md → /SKILL.md、插件专属 → 项目内）
+  normalizeSkillPaths(root, projectFile, name, name);
+
+  // 字段级差异输出（added 需补齐，kept 为项目定制保留；agent/用户按提示处理）
   if (added.length > 0) {
     console.log(`  需补齐（模板有、项目缺）${added.length} 项：`);
     for (const a of added) console.log(`    + ${a}`);

@@ -13,6 +13,7 @@ pre_task:
 
 stages:
   - name: project-init
+    executor: subagent
     skill: skills/tools/project-init.md
     sub_command: full
     input: task.md
@@ -28,6 +29,7 @@ stages:
       - action: skill-log
 
   - name: reflecting
+    executor: inline
     skill: skills/framework/reflecting.md
     sub_command: reflect
     input: [task.md, tech-selection.md, project-standards.md, execution-log.md]
@@ -41,7 +43,8 @@ stages:
         action: save
 
   - name: git-operations
-    skill: knowledge/skills/git-operations/skill.md
+    executor: inline
+    skill: knowledge/skills/git-operations/SKILL.md
     sub_command: commit
     input: [tech-selection.md, project-standards.md]
     output: changes.md

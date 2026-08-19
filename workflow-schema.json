@@ -30,6 +30,7 @@
             "items": { "type": "array", "items": { "type": "string" } }
           },
           "require_verify": { "type": "boolean", "required": false, "note": "testing/reviewing 阶段是否必须 verify 证据" },
+          "executor": { "type": "string", "required": false, "enum": ["inline", "subagent"], "note": "inline=主 agent 桥直接执行（默认，宿主 hook 全部生效，退化 CLI 模式）；subagent=派独立子代理执行（上下文隔离，需显式配置用于重步骤）" },
           "gate": { "type": "string", "required": false, "enum": ["user_approval", "none"], "note": "user_approval=产出后停等人工确认" },
           "on_fail": { "type": "string", "required": false, "note": "阶段失败回退到的阶段名" },
           "optional": { "type": "boolean", "required": false },

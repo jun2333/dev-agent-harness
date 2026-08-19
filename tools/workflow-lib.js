@@ -20,28 +20,46 @@ const path = require('path');
 const yaml = require('../hooks/simple-yaml.js');
 
 const VERIFY_CONFIG_REL = path.join('knowledge', 'verify.config.json');
-const PROJECT_PLUGINS_DIR = 'knowledge/plugins'; // 项目层插件目录（项目根，git 跟踪）
-const HARNESS_WORKFLOWS_DIR = path.join('.harness', 'workflows'); // 通用层模板目录
+const PROJECT_PLUGINS_DIR = 'knowledge/plugins'; // 项目插件目录（项目根，git 跟踪，唯一插件来源）
+const HARNESS_WORKFLOWS_DIR = path.join('.harness', 'workflows'); // 内置插件 = 模板源（不再直接使用）
 
-/** 查找某工作流插件包文件（项目层优先），返回 { file, source } 或 null */
+/**
+ * 边界检查：knowledge/plugins 目录必须存在（项目知识库插件是唯一插件来源）。
+ * 缺失时抛错给 LLM——提示先初始化/复制插件，而不是静默降级。
+ */
+function checkPluginsDir(root) {
+  if (!fs.existsSync(path.join(root, 'knowledge')) || !fs.existsSync(path.join(root, PROJECT_PLUGINS_DIR))) {
+    throw new Error(
+      `未找到项目插件目录：${PROJECT_PLUGINS_DIR} 不存在。` +
+        `内置插件（.harness/workflows/）不再直接使用，请先运行 knowledge-init 初始化知识库，` +
+        `或 workflow-init init <name> 复制内置插件到 ${PROJECT_PLUGINS_DIR}/`
+    );
+  }
+}
+
+/** 查找某工作流插件包文件（只读项目知识库 knowledge/plugins/）；缺失返回 null */
 function findWorkflowFile(root, workflowName) {
   const projectFile = path.join(root, PROJECT_PLUGINS_DIR, workflowName, 'workflow.yaml');
   if (fs.existsSync(projectFile)) return { file: projectFile, source: 'project' };
-  const harnessFile = path.join(root, HARNESS_WORKFLOWS_DIR, workflowName, 'workflow.yaml');
-  if (fs.existsSync(harnessFile)) return { file: harnessFile, source: 'harness' };
   return null;
 }
 
-/** 加载工作流插件包定义（项目层优先 → 通用兜底）；缺失返回 null */
+/** 加载工作流插件包定义（只读项目知识库）；缺失抛错给 LLM（边界检查） */
 function loadWorkflowDefinition(root, workflowName) {
   if (!workflowName) return null;
   const found = findWorkflowFile(root, workflowName);
-  if (!found) return null;
+  if (!found) {
+    checkPluginsDir(root); // knowledge/plugins 不存在 → 明确抛错
+    throw new Error(
+      `未找到工作流插件：${workflowName}（${PROJECT_PLUGINS_DIR}/ 下无该插件）。` +
+        `请先运行 workflow-init init ${workflowName} 复制内置插件，或检查插件名`
+    );
+  }
   let doc;
   try {
     doc = yaml.parse(fs.readFileSync(found.file, 'utf8'));
-  } catch {
-    return null;
+  } catch (e) {
+    throw new Error(`工作流插件解析失败：${found.file}（${e.message}）`);
   }
   const stages = {};
   for (const s of Array.isArray(doc.stages) ? doc.stages : []) {
@@ -52,48 +70,34 @@ function loadWorkflowDefinition(root, workflowName) {
     description: doc.description || '',
     stages,
     verify: doc.verify || { checks: [] },
+    pre_task: doc.pre_task || [],
+    post_task: doc.post_task || [],
     source: found.source,
   };
 }
 
-/** 列出全部可用工作流（项目层 + 通用层），返回 [{ name, source, stages }] */
+/** 列出全部可用工作流（只读项目知识库 knowledge/plugins/） */
 function listWorkflows(root) {
   const result = [];
-  const seen = new Set();
-  // 项目层优先
   const projectDir = path.join(root, PROJECT_PLUGINS_DIR);
-  if (fs.existsSync(projectDir)) {
-    for (const entry of fs.readdirSync(projectDir, { withFileTypes: true })) {
-      if (!entry.isDirectory()) continue;
-      const def = loadWorkflowDefinition(root, entry.name);
-      if (def && def.source === 'project') {
-        result.push({ name: entry.name, source: 'project', stages: Object.keys(def.stages).length });
-        seen.add(entry.name);
-      }
-    }
-  }
-  const harnessDir = path.join(root, HARNESS_WORKFLOWS_DIR);
-  if (fs.existsSync(harnessDir)) {
-    for (const entry of fs.readdirSync(harnessDir, { withFileTypes: true })) {
-      if (!entry.isDirectory() || seen.has(entry.name)) continue;
-      const def = loadWorkflowDefinition(root, entry.name);
-      if (def && def.source === 'harness') {
-        result.push({ name: entry.name, source: 'harness', stages: Object.keys(def.stages).length });
-      }
+  if (!fs.existsSync(projectDir)) return result; // 未初始化则空（调用方据此提示 knowledge-init）
+  for (const entry of fs.readdirSync(projectDir, { withFileTypes: true })) {
+    if (!entry.isDirectory()) continue;
+    const def = loadWorkflowDefinition(root, entry.name);
+    if (def && def.source === 'project') {
+      result.push({ name: entry.name, source: 'project', stages: Object.keys(def.stages).length });
     }
   }
   return result;
 }
 
 /**
- * 查找工作流插件包 check/ 下的校验脚本（项目层优先 → 通用层）。
+ * 查找工作流插件包 check/ 下的校验脚本（只读项目知识库）。
  * @returns {string|null} 绝对路径或 null
  */
 function findCheckScript(root, workflowName, checkName) {
   const projectFile = path.join(root, PROJECT_PLUGINS_DIR, workflowName, 'check', `${checkName}.js`);
   if (fs.existsSync(projectFile)) return projectFile;
-  const harnessFile = path.join(root, HARNESS_WORKFLOWS_DIR, workflowName, 'check', `${checkName}.js`);
-  if (fs.existsSync(harnessFile)) return harnessFile;
   return null;
 }
 

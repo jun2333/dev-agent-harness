@@ -62,7 +62,7 @@ description: 审查阶段技能模板（框架标准版）。knowledge-init 时�
   - 文件集合 = 本任务 git diff 变更文件，只能从中选择
   - 优先级：审查发现 Critical/Warning/P0/P1 所在文件 → 高；交互密集/服务端权限面/数据流变更 → 中；纯类型 → 低
   - 每条理由必须回答「AI 为什么自己验证不了」，不重复列 AI 已确认的问题
-- 审查完成后提示用户填写 human-review-feedback.md（模板见 templates/human-review-feedback.md），
+- 审查完成后，在 review-report.md 末尾的「## 人工反馈」区块提示人类审核者补充反馈（区块结构已在模板中内嵌，不另写 human-review-feedback.md 文件），
   供 reflecting collect 收集人类反馈经验（反馈闭环）
 - 涉及前端变更时，视觉审查对照 designing 的「视觉反模式清单」（挤/乱/花/愣/散/虚），
   抽查 implementing 是否执行了「渲染后视觉自查」；组件复用遵守 code-style 组件复用规范

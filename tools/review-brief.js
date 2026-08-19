@@ -149,24 +149,21 @@ function main() {
     console.error(`提示：checkpoint 未记录 git_commit_before_task（阶段推进时可能被覆盖），diff 将退化为对 HEAD 的比较；可用 --base <commit> 指定任务基线提交。`);
   }
   const taskTitle = (() => {
+    // 优先 task.md 的 H1 标题；编排器模式下任务描述在 manifest，无 task.md 时用它兜底
     const p = path.join(ws, 'task.md');
-    if (!fs.existsSync(p)) return taskId;
-    const first = fs.readFileSync(p, 'utf8').split('\n').find(l => /^# /.test(l));
-    return first ? first.replace(/^# /, '') : taskId;
+    if (fs.existsSync(p)) {
+      const first = fs.readFileSync(p, 'utf8').split('\n').find(l => /^# /.test(l));
+      if (first) return first.replace(/^# /, '');
+    }
+    return checkpoint.task_desc || taskId;
   })();
 
   // 变更文件（机械）
   const diff = diffNumstat(root, baseCommit);
 
-  // 各阶段 Summary
-  const stageFiles = {
-    designing: 'design.md',
-    'task-planning': 'task-plan.md',
-    implementing: 'changes.md',
-    testing: 'test-report.md',
-    reviewing: 'review-report.md',
-  };
-  const stageSummaries = Object.entries(stageFiles).map(([stage, file]) => ({
+  // 各阶段 Summary：从 checkpoint.stage_outputs 读真实产物映射（而非硬编码 feature 工作流）
+  // 顺序 = 阶段完成顺序（stage_outputs 的插入序）
+  const stageSummaries = Object.entries(checkpoint.stage_outputs || {}).map(([stage, file]) => ({
     stage,
     summary: extractSummary(path.join(ws, file)),
   }));
@@ -207,10 +204,16 @@ function main() {
   lines.push('');
   lines.push('## 各阶段结论（Summary 原样提取）');
   lines.push('');
-  for (const s of stageSummaries) {
-    lines.push(`### ${s.stage}`);
-    lines.push(s.summary.split('\n').map(l => (l.trim().startsWith('-') ? l : `> ${l}`)).join('\n'));
+  const hasAnySummary = stageSummaries.some((s) => !s.summary.startsWith('（无') && s.summary !== '（缺失）');
+  if (!hasAnySummary) {
+    lines.push('（本工作流产出物无 `## Summary for downstream` 区块——该区块是代码流程产物的交接约定，需求/非代码流程无此区块属正常）');
     lines.push('');
+  } else {
+    for (const s of stageSummaries) {
+      lines.push(`### ${s.stage}`);
+      lines.push(s.summary.split('\n').map(l => (l.trim().startsWith('-') ? l : `> ${l}`)).join('\n'));
+      lines.push('');
+    }
   }
   lines.push('## 验证证据');
   lines.push('');

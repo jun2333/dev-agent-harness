@@ -75,17 +75,36 @@ function readCheckpoint(root, taskId) {
   }
 }
 
-/** 读 tool-actions.log 全部行（JSON 数组） */
-function readToolLog(root) {
-  const logFile = path.join(root, '.harness', 'workspace', 'tool-actions.log');
-  if (!fs.existsSync(logFile)) return [];
+/** 读工具调用日志：按日全局日志（tool-actions/YYYY-MM-DD.log），按 task_id 过滤；共享 tool-actions.log 兼容 */
+function readToolLog(root, taskId) {
   const records = [];
-  for (const line of fs.readFileSync(logFile, 'utf8').split('\n')) {
-    if (!line.trim()) continue;
-    try {
-      records.push(JSON.parse(line));
-    } catch {
-      // 忽略坏行
+  const dayDir = path.join(root, '.harness', 'workspace', 'tool-actions');
+  if (fs.existsSync(dayDir)) {
+    for (const f of fs.readdirSync(dayDir)) {
+      if (!f.endsWith('.log')) continue;
+      for (const line of fs.readFileSync(path.join(dayDir, f), 'utf8').split('\n')) {
+        if (!line.trim()) continue;
+        try {
+          const rec = JSON.parse(line);
+          // 有任务时按 task_id 过滤；无任务读全部（非任务调用）
+          if (taskId && rec.task_id !== taskId) continue;
+          records.push(rec);
+        } catch {
+          // 忽略坏行
+        }
+      }
+    }
+  }
+  // 兼容旧共享日志（历史记录，无 task_id 字段）
+  const sharedLog = path.join(root, '.harness', 'workspace', 'tool-actions.log');
+  if (fs.existsSync(sharedLog)) {
+    for (const line of fs.readFileSync(sharedLog, 'utf8').split('\n')) {
+      if (!line.trim()) continue;
+      try {
+        records.push(JSON.parse(line));
+      } catch {
+        // 忽略坏行
+      }
     }
   }
   return records;
@@ -215,7 +234,7 @@ function generateSnapshot({ root, taskId }) {
   const cp = readCheckpoint(root, taskId);
   const baselineTs = (cp && (cp.created_at || cp.started_at)) || null;
 
-  const records = readToolLog(root);
+  const records = readToolLog(root, taskId);
   // 过滤：有基线时只取基线之后；基线缺失时取全部
   const relevant = baselineTs
     ? records.filter((r) => r.ts && r.ts >= baselineTs)
@@ -224,6 +243,7 @@ function generateSnapshot({ root, taskId }) {
   const fileStats = new Map(); // path -> { count, bytes, sources:Set }
   const dirStats = new Map(); // path -> { count }
 
+  // 只记录主代理（桥）的工具调用：子代理能读什么由 prompt + 交接文档限定，不做自报记账
   for (const rec of relevant) {
     const { files, dirs } = extractReads(rec);
     for (const f of files) {
