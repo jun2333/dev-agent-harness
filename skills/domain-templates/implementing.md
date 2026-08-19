@@ -16,6 +16,7 @@ description: 实施阶段技能模板（框架标准版）。knowledge-init 时�
 - 任务计划（task-plan.md）
 
 ## 上下文加载指令
+0. **读取已读清单**：读取 workspace/{task-id}/context-ledger.md，已读文件不重复读取（除非确认内容已变更）
 1. 精读 task-plan.md，了解实施步骤
 2. 读取 design.md，理解技术方案
 3. 读取相关的项目标准和模式（knowledge/standards/、knowledge/patterns/）

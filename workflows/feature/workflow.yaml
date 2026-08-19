@@ -29,6 +29,8 @@ stages:
       - skill: skills/framework/state-checkpoint.md
         action: save
       - action: skill-log
+      - skill: skills/framework/context-snapshot.md
+        action: run
 
   - name: task-planning
     skill: knowledge/skills/task-planning/skill.md
@@ -45,6 +47,8 @@ stages:
       - skill: skills/framework/state-checkpoint.md
         action: save
       - action: skill-log
+      - skill: skills/framework/context-snapshot.md
+        action: run
 
   - name: implementing
     skill: knowledge/skills/implementing/skill.md
@@ -60,6 +64,8 @@ stages:
       - skill: skills/framework/state-checkpoint.md
         action: save
       - action: skill-log
+      - skill: skills/framework/context-snapshot.md
+        action: run
 
   - name: testing
     skill: knowledge/skills/testing/skill.md
@@ -77,6 +83,8 @@ stages:
       - skill: skills/framework/state-checkpoint.md
         action: save
       - action: skill-log
+      - skill: skills/framework/context-snapshot.md
+        action: run
 
   - name: reviewing
     skill: knowledge/skills/reviewing/skill.md
@@ -94,6 +102,8 @@ stages:
       - skill: skills/framework/state-checkpoint.md
         action: save
       - action: skill-log
+      - skill: skills/framework/context-snapshot.md
+        action: run
 
   - name: reflecting
     skill: skills/framework/reflecting.md

@@ -58,21 +58,20 @@
 
 ## Context Ledger（上下文追踪）
 
-为避免重复读取文件浪费 token，维护一个简单的读取记录：
+已读清单由 `tools/context-snapshot.js` **确定性生成**（基于 tool-actions.log 的真实工具调用记录，非 LLM 自觉记账）。每阶段结束后自动刷新（workflow post_stage 钩子）。
 
 ### 记录位置
-`workspace/{task-id}/context-ledger.md`
+`workspace/{task-id}/context-ledger.md`（人类可读）+ `context-ledger.json`（机器可读）
 
 ### 记录内容
-| File | Reason | Phase | Timestamp |
-|------|--------|-------|-----------|
-| task.md | 读取需求 | designing | 2026-07-16T10:00:00Z |
-| src/components/LoginForm.tsx | 查看现有实现 | implementing | 2026-07-16T10:30:00Z |
+| 文件 | 读取次数 | 估算 token | 来源 |
+|------|---------|-----------|------|
+| src/components/LoginForm.tsx | 2 | ~1.2K | Bash |
 
 ### 使用规则
-- 每个 skill 执行前，检查 context-ledger.md 是否已读相关文件
-- 已读的文件不重复读取（除非需要最新内容）
-- 每次读取新文件后，追加记录到 context-ledger.md
+- 每个 skill 执行前，读取 context-ledger.md 的已读文件表——**已读的文件不重复读取**（除非内容已变更，需用 git 或时间戳确认）
+- 关注累计 token 估算：超出预算时压缩后续读取（优先精读小文件、用 grep 定位代替全文件读取）
+- **不手动向 context-ledger.md 追加记录**——它由 context-snapshot.js 从 tool-actions.log 生成，手写会污染事实
 - harness.md 本身只需读一次，记录后不再重复读
 
 ## 技能执行留痕
