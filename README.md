@@ -79,6 +79,7 @@
 |------|------|------|------|
 | 框架层 | `skills/framework/` | **reflecting** | 项目复盘 + 经验收集。两阶段：自动复盘生成草稿 → 手动收集到知识库 |
 | | | **state-checkpoint** | 状态记录与断点恢复。支持任务中断后从断点继续 |
+| | | **env-check** | 环境就绪检查。pre_task 自动执行，产出环境快照，防止基于错误假设开工 |
 | | | **hook-init** | hook 初始化：安装/接线门禁脚本（gate-check / check-verify） |
 | 技能自举 | `skills/skill-creation/` | **skill-design** | 设计新技能 |
 | | | **skill-evolution** | 技能自成长。汇总 skill-logs，发现技能不足并持续优化 |
@@ -156,13 +157,13 @@ skill-evolution review
 │   └── loading-strategy.md
 ├── docs/                   # 设计文档（DESIGN.md / workflow-plugin-spec.md）
 ├── skills/                 # 通用层技能（分组见「通用技能」表）
-│   ├── framework/          # 框架层：reflecting / state-checkpoint / hook-init
+│   ├── framework/          # 框架层：reflecting / state-checkpoint / env-check / hook-init
 │   ├── skill-creation/     # 技能自举：skill-design / skill-evolution / skill-implement / skill-test
 │   ├── workflow-creation/  # 工作流自举：workflow-design / workflow-implement / workflow-test
 │   ├── tools/              # 工具类：knowledge-init / project-init / tech-audit
 │   └── domain-templates/   # 框架模板：designing / task-planning / implementing / testing / reviewing
 ├── templates/              # 默认产出模板
-├── tools/                  # 运行时工具：verify.js / workflow-lib.js / workflow-init.js / skill-log.js / review-brief.js / simple-yaml.js
+├── tools/                  # 运行时工具：verify.js / env-check.js / workflow-lib.js / workflow-init.js / skill-log.js / review-brief.js / simple-yaml.js
 ├── hooks/                  # 门禁脚本：gate-check.js / check-verify.js / post-tool-log.js / lib.js / install.js
 ├── workflows/              # 工作流插件包（6 个，含 workflow.yaml + check/）
 │   ├── feature/            # 新功能开发

@@ -9,6 +9,8 @@ verify:
 pre_task:
   - skill: skills/framework/state-checkpoint.md
     action: init
+  - skill: skills/framework/env-check.md
+    action: run
 
 stages:
   - name: task-planning

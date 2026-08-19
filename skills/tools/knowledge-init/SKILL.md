@@ -90,6 +90,10 @@ description: 知识库初始化与维护。手动触发：用户说"初始化知
    - 根据项目技术栈生成具体的验证命令列表（如 `npm run test:unit`、`npx playwright test`、`npm run build`）
    - 格式：`{"schema_version": "verify.config.v1", "commands": [...], "timeout_ms": 300000}`
    - 配置由项目拥有、随项目版本管理；调整验证命令改配置，不改命令行
+9. **生成项目环境检查配置 `knowledge/env-check.config.json`**（环境就绪检查，他证；workflow 的 pre_task 由 `tools/env-check.js` 消费）：
+   - 根据项目技术栈生成环境就绪检查项，典型组合：运行环境版本（`node -v`）、依赖是否安装（`test -d node_modules`）、关键配置文件是否存在（`test -f .env`）、数据库/中间件是否启动（如 `docker ps` 检查容器）、ORM client 是否生成
+   - 格式：`{"schema_version": "env-check.v1", "checks": [{"name": "...", "command": "..."}], "timeout_ms": 30000}`
+   - 配置由项目拥有、随项目版本管理；调整检查项改配置，不改命令行
 
 ### 示例：scan 发现项目使用 tRPC + Prisma + Vitest
 则生成的技能中应包含：
@@ -103,6 +107,7 @@ description: 知识库初始化与维护。手动触发：用户说"初始化知
 - knowledge/skills/{name}/SKILL.md
 - knowledge/skills/{name}/templates/*.md（如需要）
 - knowledge/verify.config.json（项目验证配置，verify.js 据此执行验证命令）
+- knowledge/env-check.config.json（项目环境检查配置，env-check.js 据此执行环境就绪检查）
 
 ### 约束
 - 所有内容必须基于 scan 产出，不能凭空捏造
