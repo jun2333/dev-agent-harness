@@ -195,14 +195,15 @@ function normalizeSkillPaths(root, targetFile, target, name) {
       }
     }
 
-    // 2) 框架级/共享 skill 的过时 .md 引用 → /SKILL.md（保留 .harness 引用）
-    if (ref.endsWith('.md') && !ref.startsWith('knowledge/')) {
+    // 2) 框架级/共享 skill 的过时 .md 引用 → 显式 `.harness/` 前缀（相对项目根，任何解析器可解析）
+    //    （原 `skills/...` 形式依赖 bridge 的隐式前缀规则，不稳健）
+    if (ref.endsWith('.md') && !ref.startsWith('knowledge/') && !ref.startsWith('.harness/')) {
       const dir = ref.replace(/\.md$/, '');
       const skMd = path.join(root, '.harness', dir, 'SKILL.md');
       const oldRef = path.join(root, '.harness', ref);
       if (!fs.existsSync(oldRef) && fs.existsSync(skMd)) {
         fixed++;
-        return `${m[1]}${dir}/SKILL.md`;
+        return `${m[1]}.harness/${dir}/SKILL.md`;
       }
     }
     return line;
@@ -216,8 +217,10 @@ function normalizeSkillPaths(root, targetFile, target, name) {
   const issues = [];
   for (const [sname, st] of Object.entries(finalPlugin.stages)) {
     if (!st.skill) continue;
+    // 显式相对项目根（.harness/ 或 knowledge/）直接拼 root；隐式 skills/... 加 .harness 前缀
+    const explicit = st.skill.startsWith('.harness/') || st.skill.startsWith('knowledge/');
     const candidates = [
-      path.join(root, st.skill.startsWith('knowledge/') ? '.' : '.harness', st.skill),
+      path.join(root, explicit ? '.' : '.harness', st.skill),
       path.join(root, st.skill),
     ];
     if (!candidates.some((c) => fs.existsSync(c))) {

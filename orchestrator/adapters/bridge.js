@@ -17,10 +17,10 @@ function buildSubagentPrompt(ins, ctx) {
   const verifyLine = ins.require_verify
     ? `4. 若为 testing/reviewing：用 node .harness/tools/verify.js run 产出证据（命令来自 knowledge/verify.config.json，禁止 --commands 自选），证据落盘 .harness/workspace/${ctx.taskId}/verify/verification-result.json`
     : '';
-  // 技能路径：knowledge/ 开头 → 项目根；否则 .harness/ 下。子代理 cwd 是项目根，用相对路径。
-  const skillRef = ins.skill_path.startsWith('knowledge/')
-    ? `${ins.skill_path}`
-    : `.harness/${ins.skill_path}`;
+  // 技能路径：显式相对项目根（.harness/ 或 knowledge/）直接用；隐式 skills/... 加 .harness 前缀。
+  // 子代理 cwd 是项目根，用相对路径。
+  const explicit = ins.skill_path.startsWith('.harness/') || ins.skill_path.startsWith('knowledge/');
+  const skillRef = explicit ? ins.skill_path : `.harness/${ins.skill_path}`;
   return [
     `你是 harness 任务「${ctx.taskId}」的「${ins.stage}」阶段代理（工作流 ${ins.workflow}）。`,
     `工作目录：${ctx.root}`,
