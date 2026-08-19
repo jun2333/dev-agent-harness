@@ -68,6 +68,7 @@ description: 技能描述和触发方式
    - Summary for downstream 区块
    - Anti-Cherry-Pick Declaration（测试报告和审查报告）
    - Decision Log（设计文档和任务计划）
+   - Lessons Applied（任务计划）：记录命中的既有经验（knowledge/lessons/），引用即消费，命中需递增该 lesson 的 use_count 并更新 last_used
 3. 项目特定内容（角色、上下文加载指令、执行步骤、约束）基于 scan 产出填充
 4. 项目可通过 `knowledge/skills/{name}/templates/` 覆盖框架默认模板
 
