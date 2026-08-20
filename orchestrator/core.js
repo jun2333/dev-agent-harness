@@ -126,7 +126,18 @@ function execPreTask(root, taskId, wfDef) {
 function execPostStage(root, taskId, stageName, stage) {
   // 内置记账（无条件）
   writeSkillLog(root, taskId, stageName, stage);
-  // 声明的 post_stage 动作已由内置记账覆盖（state-checkpoint/skill-log），
+  // task-planning 阶段：经验记账（解析 task-plan.md 的 Lessons Applied → 递增 lessons use_count）
+  // 判断由 LLM 声明，记账由本工具确定性执行（见 tools/lessons-apply.js）
+  if (stageName === 'task-planning') {
+    try {
+      execSync(`node ${path.join(HARNESS_TOOLS, 'lessons-apply.js')} --task-id ${taskId}`, {
+        cwd: root,
+        encoding: 'utf8',
+        stdio: 'inherit',
+      });
+    } catch { /* 记账失败不阻塞流程 */ }
+  }
+  // 声明的 post_stage 动作已由内置记账覆盖（state-checkpoint/skill-log/lessons-apply），
   // 未映射的自定义动作跳过（编排器模式不接受任意执行）
 }
 

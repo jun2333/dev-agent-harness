@@ -37,7 +37,7 @@ description: 知识库初始化与维护。手动触发：用户说"初始化知
 5. 生成 knowledge/standards/code-style.md
 6. 生成 knowledge/standards/testing-rules.md
 7. 提取项目中的常见模式到 knowledge/patterns/
-8. 生成 knowledge/_index.md 推荐列表
+8. 运行 `node .harness/tools/knowledge-index.js` 生成 knowledge/_index.md（脚本自动扫描生成，不手动编辑）
 9. 在项目根目录生成 AGENTS.md，引导 agent 读取 `.harness/harness.md` 启动工作流
 
 ### 输出
@@ -116,7 +116,7 @@ description: 知识库初始化与维护。手动触发：用户说"初始化知
 - 生成的报告模板作为默认模板，项目可覆盖
 
 ## 子命令：workflow-init
-工作流模板实例化（第二批：项目层定制）。把通用工作流模板（`.harness/workflows/`）复制到项目层 `knowledge/plugins/` 并增强。
+工作流模板实例化（第二批：项目层定制）。把通用工作流模板（`.harness/workflows/`）复制到项目层 `knowledge/workflow/` 并增强。
 
 **模板语义**：通用工作流只是骨架（步骤定义），测试命令/通过标准必须项目定制——"改代码用什么测试命令、怎么测算通过"由项目决定。
 
@@ -124,7 +124,7 @@ description: 知识库初始化与维护。手动触发：用户说"初始化知
 把通用模板实例化到项目层：
 1. 执行 `node .harness/tools/workflow-init.js init <name> [--as ...] [--force]`（确定性操作：复制 + 命令池校验）
 2. 校验输出：命令池 key 缺失 → 补 `knowledge/verify.config.json` 的 commands 后再试（--force 可跳过，但 verify 会不可用）
-3. **项目增强（语义判断，agent 必须执行）**：编辑 `knowledge/plugins/{name}/workflow.yaml`：
+3. **项目增强（语义判断，agent 必须执行）**：编辑 `knowledge/workflow/{name}/workflow.yaml`：
    - `verify.checks` → 绑定项目实际测试手段（unit/lint/e2e 对应项目命令，或内置 check）
    - 按项目流程增删阶段、调整 `gate`（审批点）、改 `sections`（产出物要求）
    - 项目专属校验 → 在项目副本声明（内置 check 或命令池 key）
@@ -140,7 +140,7 @@ description: 知识库初始化与维护。手动触发：用户说"初始化知
 列出全部可用工作流（项目层 + 通用层，标注 source）。供 harness.md 启动选流。
 
 ### 约束
-- 项目层 `knowledge/plugins/` 与 knowledge/ 同属项目仓库（git 跟踪），**不进 submodule、不被 .gitignore**
+- 项目层 `knowledge/workflow/` 与 knowledge/ 同属项目仓库（git 跟踪），**不进 submodule、不被 .gitignore**
 - 解析顺序：项目层优先、通用兜底；同名项目版覆盖通用版
 - 他证不变：verify 命令来源 = 工作流定义 + 项目命令池
 - sync 只补齐"模板有项目无"，不覆盖项目定制
@@ -163,7 +163,7 @@ description: 知识库初始化与维护。手动触发：用户说"初始化知
 2. 对有 `source_refs` 的条目，检查关联源码文件是否有变更，有变更则标记待审核
 3. 识别标签高度重合的条目，建议合并
 4. 检查过期条目（90 天未引用且无 source_refs），标记 status: archived
-5. 更新 _index.md 推荐列表
+5. 运行 `node .harness/tools/knowledge-index.js` 重新生成 _index.md（脚本自动扫描，不手动编辑）
 
 ### 输出
 - 更新 knowledge/lessons/*.md（status 字段）

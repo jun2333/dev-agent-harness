@@ -51,10 +51,10 @@ function makeTempProject(workflowName = 'feature', workflowYaml = WORKFLOW_YAML,
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'harness-orch-'));
   const harness = path.join(root, '.harness');
   fs.mkdirSync(path.join(harness, 'orchestrator'), { recursive: true });
-  // 插件只读项目知识库 knowledge/plugins/{name}/（发现机制改造后不再从 .harness/workflows/ 兜底）
-  const pluginDir = path.join(root, 'knowledge', 'plugins', workflowName);
-  fs.mkdirSync(pluginDir, { recursive: true });
-  fs.writeFileSync(path.join(pluginDir, 'workflow.yaml'), workflowYaml);
+  // 工作流只读项目知识库 knowledge/workflow/{name}/（发现机制改造后不再从 .harness/workflows/ 兜底）
+  const workflowDir = path.join(root, 'knowledge', 'workflow', workflowName);
+  fs.mkdirSync(workflowDir, { recursive: true });
+  fs.writeFileSync(path.join(workflowDir, 'workflow.yaml'), workflowYaml);
   fs.writeFileSync(path.join(harness, 'orchestrator', 'config.json'), JSON.stringify({ subagent: 'bridge', ...config }));
   return root;
 }
@@ -92,18 +92,32 @@ test('start 读 manifest 创建 checkpoint，current_stage 为第一阶段', () 
   assert.strictEqual(cp.current_stage, 'designing');
 });
 
-test('start 拒绝无 user_confirmed 的 manifest（启动会话强制）', () => {
+test('start 拒绝无 user_confirmed 的 manifest（启动会话强制，确认码机制）', () => {
   const root = makeTempProject();
   const tdir = path.join(root, '.harness', 'workspace', 't1');
   fs.mkdirSync(tdir, { recursive: true });
   fs.writeFileSync(path.join(tdir, 'task.manifest.json'),
     JSON.stringify({ workflow: 'feature', task_id: 't1', task_desc: '未确认' })); // 无 user_confirmed
-  try {
-    execFileSync(process.execPath, [CORE, 'start', '--task-id', 't1'], { cwd: root, encoding: 'utf8' });
-    assert.fail('应拒绝无 user_confirmed 的启动');
-  } catch (e) {
-    assert.ok(e.stderr.includes('user_confirmed'));
-  }
+  // 1. 未确认 → 生成一次性确认码并拒绝（exit 2）
+  const r1 = run(root, 't1', 'start');
+  assert.strictEqual(r1.exit, 2); // CONFIRM_REQUIRED
+  assert.strictEqual(r1.json.ok, false);
+  assert.strictEqual(r1.json.confirm_required, true);
+  assert.ok(r1.json.confirm_code, '应生成一次性确认码');
+  // 2. 已置 user_confirmed 但缺/错确认码 → 仍拒绝
+  fs.writeFileSync(path.join(tdir, 'task.manifest.json'),
+    JSON.stringify({ workflow: 'feature', task_id: 't1', task_desc: '已确认', user_confirmed: true }));
+  const r2 = run(root, 't1', 'start');
+  assert.strictEqual(r2.exit, 2);
+  assert.ok(r2.json.confirm_code === r1.json.confirm_code, '确认码应保持不变直至消费');
+  // 3. 带正确确认码 → 启动成功
+  const r3 = run(root, 't1', 'start', '--code', r1.json.confirm_code);
+  assert.strictEqual(r3.exit, 0);
+  assert.strictEqual(r3.json.ok, true);
+  assert.strictEqual(r3.json.current_stage, 'designing');
+  // 4. 确认码一次性：消费后 pending_confirm 清除
+  const cp = JSON.parse(fs.readFileSync(path.join(tdir, 'checkpoint.json'), 'utf8'));
+  assert.strictEqual(cp.pending_confirm, null);
 });
 
 test('next 输出阶段指令（含 adapter 生成的 prompt_template）', () => {

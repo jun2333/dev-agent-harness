@@ -1,7 +1,7 @@
 name: feature
-description: 新功能开发流程
+description: 新功能开发与代码重构流程
 
-# 工作流验证手段（测试手段定义，见 docs/workflow-plugin-spec.md）
+# 工作流验证手段（测试手段定义，见 docs/workflow-spec.md）
 # checks: 内置 check（skill-check 等）或命令池 key（unit/lint/e2e，从 knowledge/verify.config.json 解析）
 verify:
   checks: [unit, lint]
@@ -14,6 +14,22 @@ pre_task:
     action: run
 
 stages:
+  - name: precondition
+    executor: inline
+    skill: .harness/skills/framework/precondition/SKILL.md
+    input: task.md
+    output: task.md
+    sections:
+      - [## 需求来源]
+    require_verify: false
+    permission: read-only
+    tools: read+bash
+    gate: user_approval
+    post_stage:
+      - skill: skills/framework/state-checkpoint.md
+        action: save
+      - action: skill-log
+
   - name: designing
     executor: subagent
     skill: knowledge/skills/designing/SKILL.md

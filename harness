@@ -4,7 +4,7 @@
  * harness — 编排层入口包装脚本
  *
  * 让"进编排层还是自然对话"成为用户的一步显式选择：
- *   harness workflows                      列出可用工作流（来自 knowledge/plugins/）
+ *   harness workflows                      列出可用工作流（来自 knowledge/workflow/）
  *   harness start --workflow <name> --task-id <id> --desc "<任务>" [--desc-user-provided]
  *                                         -> 建 workspace/<id>/task.md + task.manifest.json（不含 user_confirmed）
  *                                            + 调 orchestrator/core.js start（未确认会被拒绝并生成确认码）
@@ -47,7 +47,7 @@ function getArg(args, name) {
 function cmdWorkflows(root) {
   const list = listWorkflows(root);
   if (!list.length) {
-    console.log('无可用工作流（knowledge/plugins 为空）。请先 knowledge-init / workflow-init init <name>。');
+    console.log('无可用工作流（knowledge/workflow 为空）。请先 knowledge-init / workflow-init init <name>。');
     return;
   }
   console.log('可用工作流：');

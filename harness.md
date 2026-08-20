@@ -7,7 +7,7 @@
 
 当用户给我一个任务时：
 
-1. 读取 workflows/ 目录，根据任务类型选择匹配的工作流（如 feature、bugfix、skill-creation 等）
+1. 执行 `harness workflows` 或读取 `knowledge/workflow/` 目录（项目层工作流，唯一来源；`.harness/workflows/` 仅存内置模板），根据任务类型选择匹配的工作流（如 feature、bugfix、skill-creation 等）
 2. 按工作流定义的阶段顺序执行
 3. 每个阶段：
    - 加载对应的 skill 文件
@@ -16,6 +16,18 @@
    - 等待用户确认后再进入下一阶段
 4. 任务完成后，执行 reflecting skill 阶段一沉淀经验
 5. 用户审核草稿后，通过"收集经验"或"reflecting collect {task-id}"触发阶段二
+
+## 启动流程
+
+进编排层必须用户显式执行 `harness start`，且 **task-id 与任务描述必须由用户提供，禁止 agent/脚本自动生成**：
+
+1. 用户提供 task-id 与任务描述（工作流从 `knowledge/workflow/` 选择）
+2. `harness start --workflow <name> --task-id <id> --desc "<用户原文>"` 创建任务目录与 manifest（不含 user_confirmed）
+3. `core.js start` 因未确认拒绝（exit 2），生成**一次性确认码**
+4. 用 AskUserQuestion 让用户确认 task-id/task-desc，更新 `workspace/{id}/task.manifest.json` 的 user_confirmed 置 true
+5. 带确认码重跑 `core.js start --task-id <id> --code <确认码>` 正式进入编排层
+
+> 用户不提供 task-id/描述则不启动；确认码一次性，只能经 AskUserQuestion 用户确认后取得，agent 无法绕过。
 
 ## 关键原则
 
@@ -79,6 +91,8 @@
 用户审核草稿后，支持以下调用方式：
 - 对话中说"收集经验"或"reflecting collect"
 - 执行 reflecting collect {task-id}
+
+经验/模式/标准变化后，运行 `node .harness/tools/knowledge-index.js` 重新生成 `knowledge/_index.md`（索引由脚本扫描生成，不手动编辑）；`--check` 可校验索引是否过期（过期 exit 1）。
 
 ## 技能进化
 

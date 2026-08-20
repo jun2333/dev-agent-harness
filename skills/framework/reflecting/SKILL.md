@@ -72,7 +72,7 @@ description: 项目复盘 + 经验收集。阶段一自动触发：workflow 最�
 2. 根据用户指定的编号，将 lessons-draft 对应条目标题加上 `✅` 标记
 3. 筛选带 `✅` 的经验，生成 frontmatter（tags, confidence, created, use_count: 1, source_task, status, invalidation_condition, source_refs）。`use_count` 初始值固定为 **1**——经验因实际使用踩坑而被收集，收集即首次使用；后续由 task-planning 阶段在命中时递增（引用即消费）
 4. 将人工反馈区块中「建议沉淀 = 是」的条目转为经验条目，frontmatter 增加 `source: human-review`，与步骤 3 的条目一起写入 knowledge/lessons/ 目录
-5. 更新 knowledge/_index.md（如需要）
+5. 运行 `node .harness/tools/knowledge-index.js` 重新生成 `knowledge/_index.md`（索引由脚本生成，不手动编辑）
 6. 清理已收集的草稿（lessons-draft.md 与已处理完的反馈区块/兼容文件）
 
 ### 输出
