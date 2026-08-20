@@ -16,7 +16,6 @@ description: 测试阶段技能模板（框架标准版）。knowledge-init 时�
 - 变更清单（changes.md）
 
 ## 上下文加载指令
-0. **读取已读清单**：读取 workspace/{task-id}/context-ledger.md，已读文件不重复读取（除非确认内容已变更）
 1. 精读 changes.md，了解所有变更
 2. 读取变更文件及其对应的测试文件
 3. 读取项目的测试规范（如 knowledge/standards/testing-rules.md）

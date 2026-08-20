@@ -179,14 +179,22 @@ test('advance 无 approved 时停在 user_approval 阶段（exit 2 CONFIRM_REQUI
   assert.strictEqual(r.json.confirm_required, true);
 });
 
-test('approve + advance --approved true 推进到下一阶段', () => {
+test('approve + advance 推进到下一阶段（需先 advance 生成确认码）', () => {
   const root = makeTempProject();
   initTask(root, 't1');
   fs.writeFileSync(path.join(root, '.harness', 'workspace', 't1', 'stage-result.json'),
     JSON.stringify({ stage: 'designing', output_file: 'design.md', sections_ok: true, verify_evidence: null, notes: 'ok' }));
   fs.writeFileSync(path.join(root, '.harness', 'workspace', 't1', 'design.md'),
     '# 设计\n\n## Summary for downstream\n结论\n\n## Decision Log\nD-1\n');
-  const a = run(root, 't1', 'approve', '--stage', 'designing');
+  // 第一次 advance:触发 confirm_required,生成一次性确认码
+  const first = run(root, 't1', 'advance');
+  assert.strictEqual(first.exit, 2);
+  assert.ok(first.json.confirm_code, 'advance 应返回 confirm_code');
+  // 无码 approve 应拒绝
+  const noCode = run(root, 't1', 'approve', '--stage', 'designing');
+  assert.strictEqual(noCode.exit, 1);
+  // 正确码 approve 通过
+  const a = run(root, 't1', 'approve', '--stage', 'designing', '--code', first.json.confirm_code);
   assert.strictEqual(a.exit, 0);
   const adv = run(root, 't1', 'advance');
   assert.strictEqual(adv.exit, 0);
@@ -262,23 +270,25 @@ test('on_fail 回退到指定阶段，重做上限从 config 读取并触发 rew
 
 // ---- 任务完成：自动生成审核简报（通用最后流程） ----
 
-test('advance 程序化执行 post_stage（skill-log + context-snapshot）', () => {
+test('advance 程序化执行 post_stage（skill-log）', () => {
   const root = makeTempProject();
   initTask(root, 't1');
   fs.writeFileSync(path.join(root, '.harness', 'workspace', 't1', 'stage-result.json'),
     JSON.stringify({ stage: 'designing', output_file: 'design.md', sections_ok: true, verify_evidence: null, notes: 'ok' }));
   fs.writeFileSync(path.join(root, '.harness', 'workspace', 't1', 'design.md'),
     '# 设计\n\n## Summary for downstream\n结论\n\n## Decision Log\nD-1\n');
-  const a = run(root, 't1', 'approve', '--stage', 'designing');
+  const first = run(root, 't1', 'advance');
+  assert.strictEqual(first.exit, 2);
+  const a = run(root, 't1', 'approve', '--stage', 'designing', '--code', first.json.confirm_code);
   assert.strictEqual(a.exit, 0);
   const adv = run(root, 't1', 'advance');
   assert.strictEqual(adv.exit, 0);
   assert.strictEqual(adv.json.next_stage, 'task-planning');
 
-  // post_stage 程序化执行产物
+  // post_stage 程序化执行产物（context-ledger 已移除：subagent 隔离后上下文可控，主代理调用由 post-tool-log 记账）
   const tdir = path.join(root, '.harness', 'workspace', 't1');
   assert.ok(fs.existsSync(path.join(tdir, 'skill-logs', 'designing.md')), 'skill-log 应生成');
-  assert.ok(fs.existsSync(path.join(tdir, 'context-ledger.md')), 'context-ledger 应生成');
+  assert.ok(!fs.existsSync(path.join(tdir, 'context-ledger.md')), 'context-ledger 不应生成');
   const log = fs.readFileSync(path.join(tdir, 'skill-logs', 'designing.md'), 'utf8');
   assert.ok(log.includes('designing'));
 });

@@ -8,7 +8,8 @@
  *       .harness/workspace/tool-actions/{YYYY-MM-DD}.log
  *       每条记录带 task_id（从编排器维护的 .harness/workspace/.active-task.json 读取；
  *       非任务状态时为 null）。
- * 目的：确定性记录 agent 实际工具调用（审计 + context-snapshot 已读清单数据源），
+ * 目的：确定性记录 agent 实际工具调用（审计留痕；context-snapshot 已移除，
+ *       不再有下游消费，此日志作为主代理调用的事实记录）。
  *       日志全局记录 + 按日归档便于清理；按 task_id 过滤查询不耗 token。
  * 失败策略：日志 hook 永远 exit 0，任何异常都不影响主流程
  */

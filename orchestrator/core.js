@@ -16,7 +16,8 @@
 
 const fs = require('fs');
 const path = require('path');
-const { execSync } = require('child_process');
+const crypto = require('crypto');
+const { execSync, spawnSync } = require('child_process');
 const { readJson } = require('../tools/stage-check.js');
 const { loadWorkflowDefinition, resolveVerifyCommands } = require('../tools/workflow-lib.js');
 const { validate } = require('./validate.js');
@@ -115,17 +116,17 @@ function execPreTask(root, taskId, wfDef) {
  * 程序化执行阶段后动作（advance 推进时调用）。
  * 内置记账每阶段无条件执行（一致性，不依赖 workflow 声明）：
  *   - skill-log            编排器写 skill-logs/{stage}.md（格式对齐 skill-log.js）
- *   - context-snapshot     刷新已读清单
  *   - state-checkpoint     由编排器 checkpoint 更新替代（不执行）
  * workflow 声明的 post_stage 作为文档性声明（可读），实际执行统一走内置记账。
+ *
+ * 注：context-snapshot（context-ledger）已移除（2026-08-20 用户要求）：
+ * 使用 subagent 隔离后子代理上下文可控，主代理工具调用由 post-tool-log.js 记账，
+ * 已读清单是重复劳动。
  */
 function execPostStage(root, taskId, stageName, stage) {
   // 内置记账（无条件）
   writeSkillLog(root, taskId, stageName, stage);
-  try {
-    execSync(`node ${path.join(HARNESS_TOOLS, 'context-snapshot.js')} run --task-id ${taskId}`, { cwd: root, encoding: 'utf8' });
-  } catch { /* 快照失败不影响推进 */ }
-  // 声明的 post_stage 动作已由内置记账覆盖（state-checkpoint/skill-log/context-snapshot），
+  // 声明的 post_stage 动作已由内置记账覆盖（state-checkpoint/skill-log），
   // 未映射的自定义动作跳过（编排器模式不接受任意执行）
 }
 
@@ -323,15 +324,21 @@ function cmdAdvance(root, taskId) {
     process.exit(1);
   }
 
-  // 2. gate: user_approval 必须已 approve（approved_stages 含当前阶段）——--approved 参数废弃，不能绕过审批
+  // 2. gate: user_approval 必须已 approve（approved_stages 含当前阶段）——必须携带一次性确认码
   if (stage.gate === 'user_approval') {
     const isApproved = cp.approved_stages.includes(stageName);
     if (!isApproved) {
+      // 无待确认码则生成一个(与 run-stage 同源,保证 approve 有码可校验)
+      if (!cp.pending_confirm || cp.pending_confirm.stage !== stageName) {
+        cp.pending_confirm = { code: generateConfirmCode(), stage: stageName, created_at: new Date().toISOString() };
+        writeJson(path.join(taskDir(root, taskId), 'checkpoint.json'), cp);
+      }
       out({
         ok: true,
         confirm_required: true,
+        confirm_code: cp.pending_confirm.code,
         stage: stageName,
-        message: `阶段「${stageName}」产出已通过校验，需人工确认后才能进入下一阶段。请先执行 approve --task-id ${taskId} --stage ${stageName}（经 AskUserQuestion 用户确认后落盘），再 advance。`,
+        message: `阶段「${stageName}」产出已通过校验，需人工确认后才能进入下一阶段。请先执行 approve --task-id ${taskId} --stage ${stageName} --code <确认码>（确认码：${cp.pending_confirm.code}，经 AskUserQuestion 用户确认后落盘），再 advance。`,
       });
       process.exit(2);
     }
@@ -352,7 +359,7 @@ function cmdAdvance(root, taskId) {
     cp.completed_at = new Date().toISOString();
     writeJson(path.join(taskDir(root, taskId), 'checkpoint.json'), cp);
 
-    // 执行最后阶段的 post_stage（skill-log / context-snapshot，checkpoint complete 已由编排器替代）
+    // 执行最后阶段的 post_stage（skill-log，checkpoint complete 已由编排器替代）
     execPostStage(root, taskId, stageName, stage);
 
     // 任务完成：自动生成审核简报（通用最后流程，机械合成不编造）
@@ -384,22 +391,161 @@ function cmdAdvance(root, taskId) {
   cp.current_stage = next;
   writeJson(path.join(taskDir(root, taskId), 'checkpoint.json'), cp);
 
-  // 程序化执行当前阶段的 post_stage（skill-log / context-snapshot，checkpoint save 已由编排器替代）
+  // 程序化执行当前阶段的 post_stage（skill-log，checkpoint save 已由编排器替代）
   execPostStage(root, taskId, stageName, stage);
 
   out({ ok: true, stage: stageName, next_stage: next, instruction: buildInstruction(root, taskId, cp, wfDef) });
 }
 
+// ---------------------------------------------------------------- run-stage
+
+/** 从子代理 stdout 提取最后一个 JSON code block(容错:去围栏、容忍尾逗号) */
+function extractJsonFromStdout(stdout) {
+  if (!stdout) return null;
+  // 优先取 ```json ... ``` 块
+  const blocks = [...stdout.matchAll(/```(?:json)?\s*([\s\S]*?)```/gi)];
+  const lastBlock = blocks.length > 0 ? blocks[blocks.length - 1][1].trim() : null;
+  const candidate = lastBlock || stdout.trim();
+  try {
+    // 容忍尾逗号
+    return JSON.parse(candidate.replace(/,\s*([}\]])/g, '$1'));
+  } catch {
+    return null;
+  }
+}
+
+/** 生成一次性确认码(6 位大写字母数字) */
+function generateConfirmCode() {
+  return crypto.randomBytes(4).toString('hex').toUpperCase().slice(0, 6);
+}
+
+/**
+ * run-stage — 程序化执行当前阶段(headless 形态:脚本直调子代理)
+ *
+ * 流程:生成 spawn 命令 → 登录态检查 → spawnSync 执行子代理 →
+ *      解析 stdout JSON → 写入 stage-result.json → validate 校验。
+ * user_approval 阶段 validate 通过后生成一次性确认码落盘并暂停(exit 2)。
+ */
+function cmdRunStage(root, taskId) {
+  const cp = loadCheckpoint(root, taskId);
+  if (!cp) { console.error(`[orchestrator] checkpoint 不存在：${taskId}（先 start）`); process.exit(1); }
+  const stageName = cp.current_stage;
+  if (!stageName) {
+    clearActiveTask(root);
+    out({ ok: true, done: true, task_id: taskId, message: '任务已完成，无需执行阶段' });
+    return;
+  }
+  let wfDef;
+  try {
+    wfDef = loadWorkflowDefinition(root, cp.workflow);
+  } catch (e) {
+    console.error(`[orchestrator] ${e.message}`);
+    process.exit(1);
+  }
+  const stage = wfDef.stages[stageName];
+  if (!stage) {
+    console.error(`[orchestrator] 工作流 ${cp.workflow} 无阶段 ${stageName}`);
+    process.exit(1);
+  }
+
+  const ins = buildInstruction(root, taskId, cp, wfDef);
+  if (!ins.spawn) {
+    console.error('[orchestrator] 当前配置非 headless 形态（config.subagent != "headless"），run-stage 需要脚本直调子代理。请改 orchestrator/config.json');
+    process.exit(1);
+  }
+  const config = readJson(path.join(root, '.harness', 'orchestrator', 'config.json')) || {};
+  const headless = require(path.join(__dirname, 'adapters', 'headless.js'));
+  const ctx = { root, taskId, workflow: cp.workflow, headlessCli: config.headless_cli };
+
+  // 登录态检查:headless 无法交互重新登录
+  if (!headless.checkAuth(ctx)) {
+    console.error('[orchestrator] headless CLI 登录态失效：请先在交互会话登录后重试（headless 无法自动重新登录）');
+    process.exit(1);
+  }
+
+  // 执行子代理(独立进程)
+  const spawnCfg = ins.spawn;
+  const timeoutMs = Number(config.stage_timeout_ms) || 600000;
+  // 命令可能带前缀参数(如 "node .harness/test/mock-headless.js" 或 "codebuddy --debug"),
+  // 拆分首词为可执行文件,其余并入 args
+  const cmdTokens = String(spawnCfg.command).trim().split(/\s+/);
+  const exe = cmdTokens.shift();
+  const spawnArgs = [...cmdTokens, ...spawnCfg.args];
+  const run = spawnSync(exe, spawnArgs, {
+    cwd: root,
+    encoding: 'utf8',
+    timeout: timeoutMs,
+    env: process.env,
+    maxBuffer: 50 * 1024 * 1024,
+  });
+
+  // 执行日志(原始 stdout 留痕,失败排查用)
+  const runLogDir = path.join(taskDir(root, taskId), 'stage-runs');
+  fs.mkdirSync(runLogDir, { recursive: true });
+  const runLogFile = path.join(runLogDir, `${stageName}-${Date.now()}.log`);
+  fs.writeFileSync(runLogFile,
+    `Command: ${spawnCfg.command} ${spawnCfg.args.join(' ')}\nExit: ${run.status}${run.error ? ' / ' + run.error.message : ''}\n\n--- STDOUT ---\n${run.stdout || ''}\n\n--- STDERR ---\n${run.stderr || ''}\n`);
+
+  if (run.error || run.status !== 0) {
+    console.error(`[orchestrator] 子代理执行失败（exit ${run.status}）：${(run.error && run.error.message) || '非零退出码'}。执行日志：${runLogFile}`);
+    process.exit(1);
+  }
+
+  // 解析 stdout JSON 摘要 → 写入 stage-result.json
+  const summary = extractJsonFromStdout(run.stdout || '');
+  if (!summary) {
+    console.error(`[orchestrator] 子代理 stdout 未输出可解析的 JSON 摘要（约定 JSON code block）。执行日志：${runLogFile}`);
+    process.exit(1);
+  }
+  writeJson(path.join(taskDir(root, taskId), 'stage-result.json'), summary);
+
+  // validate(机械校验,不采信子代理自报)
+  const res = validate({ root, taskId });
+  if (!res.ok) {
+    out({ ok: false, stage: res.stage, failures: res.failures, run_log: runLogFile, message: '阶段产出未通过校验' });
+    process.exit(1);
+  }
+
+  // user_approval:生成一次性确认码落盘,暂停等人工确认
+  if (stage.gate === 'user_approval') {
+    if (!cp.pending_confirm || cp.pending_confirm.stage !== stageName) {
+      cp.pending_confirm = { code: generateConfirmCode(), stage: stageName, created_at: new Date().toISOString() };
+      writeJson(path.join(taskDir(root, taskId), 'checkpoint.json'), cp);
+    }
+    out({
+      ok: true,
+      stage: stageName,
+      confirm_required: true,
+      confirm_code: cp.pending_confirm.code,
+      run_log: runLogFile,
+      message: `阶段「${stageName}」产出已通过校验，需人工确认。请向用户展示产出并获取确认码（${cp.pending_confirm.code}），然后执行 approve --task-id ${taskId} --stage ${stageName} --code <确认码>`,
+    });
+    process.exit(2); // CONFIRM_REQUIRED
+  }
+
+  out({ ok: true, stage: stageName, run_log: runLogFile, message: '阶段执行完成且校验通过。可执行 advance 推进（或继续下一阶段）' });
+}
+
 // ---------------------------------------------------------------- approve
 
-function cmdApprove(root, taskId, stageName) {
+function cmdApprove(root, taskId, stageName, code) {
   const cp = loadCheckpoint(root, taskId);
   if (!cp) { console.error(`[orchestrator] checkpoint 不存在：${taskId}`); process.exit(1); }
   if (cp.current_stage !== stageName) {
     console.error(`[orchestrator] 当前阶段 ${cp.current_stage}，不是 ${stageName}`);
     process.exit(1);
   }
+  // 确认码强校验:必须匹配 pending_confirm(一次性),无码/错码拒绝
+  const pc = cp.pending_confirm;
+  if (!pc || pc.stage !== stageName || pc.code !== code || !code) {
+    console.error(
+      `[orchestrator] 确认码不匹配或缺失：approve 必须携带与当前阶段匹配的一次性确认码。` +
+        `请先执行 run-stage（或 advance）获取确认码，再 approve --code <确认码>`
+    );
+    process.exit(1);
+  }
   cp.approved_stages = [...cp.approved_stages.filter((s) => s !== stageName), stageName];
+  cp.pending_confirm = null; // 一次性:使用后清除
   writeJson(path.join(taskDir(root, taskId), 'checkpoint.json'), cp);
   out({ ok: true, approved: stageName, message: `阶段「${stageName}」已确认，可 advance` });
 }
@@ -449,6 +595,12 @@ function main() {
       cmdNext(root, taskId);
       break;
     }
+    case 'run-stage': {
+      const taskId = getArg('task-id');
+      if (!taskId) { console.error('Usage: node core.js run-stage --task-id <id>'); process.exit(1); }
+      cmdRunStage(root, taskId);
+      break;
+    }
     case 'validate': {
       const taskId = getArg('task-id');
       if (!taskId) { console.error('Usage: node core.js validate --task-id <id>'); process.exit(1); }
@@ -467,8 +619,9 @@ function main() {
     case 'approve': {
       const taskId = getArg('task-id');
       const stageName = getArg('stage');
-      if (!taskId || !stageName) { console.error('Usage: node core.js approve --task-id <id> --stage <name>'); process.exit(1); }
-      cmdApprove(root, taskId, stageName);
+      const code = getArg('code');
+      if (!taskId || !stageName) { console.error('Usage: node core.js approve --task-id <id> --stage <name> --code <code>'); process.exit(1); }
+      cmdApprove(root, taskId, stageName, code);
       break;
     }
     case 'status': {
@@ -478,7 +631,7 @@ function main() {
       break;
     }
     default:
-      console.error('Usage: node core.js <start|next|validate|advance|approve|status> [--task-id <id>] ...');
+      console.error('Usage: node core.js <start|next|run-stage|validate|advance|approve|status> [--task-id <id>] ...');
       process.exit(1);
   }
 }
@@ -504,4 +657,6 @@ if (require.main === module) main();
 module.exports = {
   buildInstruction,
   findLatestTaskId,
+  extractJsonFromStdout,
+  generateConfirmCode,
 };

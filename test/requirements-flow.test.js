@@ -56,9 +56,13 @@ function completeStage(root, taskId, stage, content, outputFile) {
     JSON.stringify({ stage, output_file: outputFile, sections_ok: true, verify_evidence: null, notes: 'ok' }));
 }
 
-/** 推进一个 user_approval 阶段：approve + advance */
+/** 推进一个 user_approval 阶段：advance 生成确认码 → approve --code → advance */
 function advanceApproved(root, taskId, stage) {
-  const a = run(root, taskId, 'approve', '--stage', stage);
+  // 第一次 advance 触发 confirm_required 并生成一次性确认码
+  const first = run(root, taskId, 'advance');
+  assert.strictEqual(first.exit, 2);
+  assert.ok(first.json.confirm_code, 'advance 应返回 confirm_code');
+  const a = run(root, taskId, 'approve', '--stage', stage, '--code', first.json.confirm_code);
   assert.strictEqual(a.exit, 0);
   return run(root, taskId, 'advance');
 }

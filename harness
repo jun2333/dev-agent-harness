@@ -1,0 +1,184 @@
+#!/usr/bin/env node
+
+/**
+ * harness — 编排层入口包装脚本
+ *
+ * 让"进编排层还是自然对话"成为用户的一步显式选择：
+ *   harness workflows                      列出可用工作流（来自 knowledge/plugins/）
+ *   harness start --workflow <name> --desc "<任务>" [--task-id <id>]
+ *                                         -> 建 workspace/<id>/task.md + task.manifest.json
+ *                                            + 调 orchestrator/core.js start（落 active-task 标记）
+ *   harness off                            切自然对话模式（写 .harness/.harness-off，免编排）
+ *   harness on                             恢复：清掉自然标记 + 活跃任务标记
+ *   harness status                         当前处于哪种模式
+ *
+ * 进编排层靠用户显式执行 harness start（提示词引导，无 PreToolUse 拦截）；
+ * 一旦进入，流程由编排器引擎控制（run-stage / validate / approve --code / advance 状态机）。
+ */
+
+const fs = require('fs');
+const path = require('path');
+const { execFileSync } = require('child_process');
+
+const HARNESS_DIR = __dirname; // .harness
+const ORCHESTRATOR = path.join(HARNESS_DIR, 'orchestrator', 'core.js');
+const { listWorkflows, loadWorkflowDefinition } = require('./tools/workflow-lib.js');
+
+function findHarnessRoot(startDir) {
+  let current = path.resolve(startDir || process.cwd());
+  while (true) {
+    if (fs.existsSync(path.join(current, '.harness'))) return current;
+    const parent = path.dirname(current);
+    if (parent === current) return null;
+    current = parent;
+  }
+}
+
+function getArg(args, name) {
+  const eq = args.find((a) => a.startsWith(`--${name}=`));
+  if (eq) return eq.slice(`--${name}=`.length);
+  const i = args.indexOf(`--${name}`);
+  return i !== -1 && args[i + 1] !== undefined ? args[i + 1] : null;
+}
+
+// ---------------------------------------------------------------- workflows
+
+function cmdWorkflows(root) {
+  const list = listWorkflows(root);
+  if (!list.length) {
+    console.log('无可用工作流（knowledge/plugins 为空）。请先 knowledge-init / workflow-init init <name>。');
+    return;
+  }
+  console.log('可用工作流：');
+  list.forEach((w, i) => {
+    let desc = '';
+    try {
+      desc = loadWorkflowDefinition(root, w.name).description || '';
+    } catch { /* 忽略单条解析错误 */ }
+    console.log(`  [${i + 1}] ${w.name.padEnd(18)} ${desc}`);
+  });
+  console.log('\n走某工作流： harness start --workflow <name> --desc "<任务>"');
+  console.log('自然对话：   harness off');
+}
+
+// ---------------------------------------------------------------- start
+
+function cmdStart(root, workflow, desc, taskId) {
+  if (!workflow) {
+    console.error('start 需要 --workflow <name>（先用 harness workflows 查看）。');
+    process.exit(1);
+  }
+  if (!desc || !desc.trim()) {
+    console.error(
+      '[harness] start 需要 --desc "<任务描述>"：任务描述必须来自用户确认的真实内容，不允许自动生成占位。' +
+        '请先向用户确认要做什么，再用用户的话作为 --desc。'
+    );
+    process.exit(1);
+  }
+  desc = desc.trim();
+  let def;
+  try {
+    def = loadWorkflowDefinition(root, workflow);
+  } catch (e) {
+    console.error('[harness] ' + e.message);
+    process.exit(1);
+  }
+  const id = taskId || `${workflow}-${Date.now().toString(36)}`;
+  const tdir = path.join(root, '.harness', 'workspace', id);
+  fs.mkdirSync(tdir, { recursive: true });
+  fs.writeFileSync(
+    path.join(tdir, 'task.md'),
+    `# ${desc}\n\n## Summary for downstream\n\n${desc}\n`
+  );
+  fs.writeFileSync(
+    path.join(tdir, 'task.manifest.json'),
+    JSON.stringify(
+      {
+        workflow,
+        task_desc: desc || '',
+        user_confirmed: true, // 用户显式运行 harness start 即视为确认（替代 AskUserQuestion）
+        created_at: new Date().toISOString(),
+      },
+      null,
+      2
+    )
+  );
+  try {
+    execFileSync('node', [ORCHESTRATOR, 'start', '--task-id', id], {
+      cwd: root,
+      stdio: 'inherit',
+    });
+  } catch (e) {
+    console.error('[harness] orchestrator start 失败：' + (e.message || e));
+    process.exit(1);
+  }
+  console.log(
+    `\n[harness] 已进入编排层（${workflow}，task-id=${id}）。` +
+      `\n后续：core.js next 取阶段指令 → 产出阶段文件 → core.js validate → core.js approve → core.js advance，循环到 reflecting。`
+  );
+}
+
+// ---------------------------------------------------------------- off / on / status
+
+function cmdOff(root) {
+  const file = path.join(root, '.harness', '.harness-off');
+  fs.writeFileSync(file, JSON.stringify({ since: new Date().toISOString() }, null, 2));
+  console.log('[harness] 已切到「自然对话」模式（免编排）。下次改文件不再询问。用 harness on 恢复。');
+}
+
+function cmdOn(root) {
+  const off = path.join(root, '.harness', '.harness-off');
+  const active = path.join(root, '.harness', 'workspace', '.active-task.json');
+  if (fs.existsSync(off)) fs.rmSync(off, { force: true });
+  if (fs.existsSync(active)) fs.rmSync(active, { force: true });
+  console.log('[harness] 已恢复：下次改文件会重新询问走编排层还是自然对话。');
+}
+
+function cmdStatus(root) {
+  const off = path.join(root, '.harness', '.harness-off');
+  const active = path.join(root, '.harness', 'workspace', '.active-task.json');
+  if (fs.existsSync(active)) {
+    try {
+      const a = JSON.parse(fs.readFileSync(active, 'utf8'));
+      // workflow / current_stage 在任务的 checkpoint.json，不在 active-task.json
+      const cpPath = path.join(root, '.harness', 'workspace', a.task_id, 'checkpoint.json');
+      let wf = '';
+      let stage = '';
+      if (fs.existsSync(cpPath)) {
+        const cp = JSON.parse(fs.readFileSync(cpPath, 'utf8'));
+        wf = cp.workflow || '';
+        stage = cp.current_stage || '已完成';
+      }
+      console.log(`模式：编排层（task-id=${a.task_id}，workflow=${wf}，当前阶段=${stage}）`);
+    } catch (e) {
+      console.log('模式：编排层（活跃任务标记存在，但 checkpoint 读取失败：' + (e.message || e) + '）。');
+    }
+  } else if (fs.existsSync(off)) {
+    console.log('模式：自然对话（免编排）。');
+  } else {
+    console.log('模式：未决定（下次 Edit/Write 会弹出工作流菜单）。');
+  }
+}
+
+// ---------------------------------------------------------------- 主流程
+
+function main() {
+  const args = process.argv.slice(2);
+  const cmd = args[0];
+  const root = findHarnessRoot(process.cwd());
+  if (!root) {
+    console.error('[harness] 未找到 .harness 目录（不是 harness 项目）。');
+    process.exit(1);
+  }
+  if (cmd === 'workflows') return cmdWorkflows(root);
+  if (cmd === 'start') return cmdStart(root, getArg(args, 'workflow'), getArg(args, 'desc'), getArg(args, 'task-id'));
+  if (cmd === 'off') return cmdOff(root);
+  if (cmd === 'on') return cmdOn(root);
+  if (cmd === 'status') return cmdStatus(root);
+  console.error('用法: harness <workflows|start|off|on|status> [--workflow <name> --desc <文本>]');
+  process.exit(1);
+}
+
+if (require.main === module) main();
+
+module.exports = { buildMenu: cmdWorkflows, findHarnessRoot };

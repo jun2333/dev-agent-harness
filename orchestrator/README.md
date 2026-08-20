@@ -11,10 +11,12 @@ node .harness/orchestrator/core.js <command> [--args]
 start    --task-id <id>       读 manifest（必须含 user_confirmed: true）初始化任务，
                               执行 pre_task（env-check 等），写 .active-task.json
 next     --task-id <id>       输出当前阶段的执行指令（含 executor / prompt_template / spawn）
+run-stage --task-id <id>      headless 形态：脚本 spawn 子代理执行当前阶段 → 解析 stdout JSON
+                              写 stage-result.json → validate；user_approval 阶段生成确认码暂停
 validate --task-id <id>       校验当前阶段（结构层 + 机械检查 + verify 证据对账）
-advance  --task-id <id>       推进状态（user_approval 阶段必须先 approve），执行 post_stage 记账，
+advance  --task-id <id>       推进状态（user_approval 阶段必须先 approve --code），执行 post_stage 记账，
                               任务完成时生成审核简报并清除 .active-task.json
-approve  --task-id <id> --stage <name>   落盘人工批准（user_approval 阶段的唯一通过凭证）
+approve  --task-id <id> --stage <name> --code <code>   落盘人工批准（须携带一次性确认码，防主 agent 自我批准）
 status   --task-id <id>       查看进度（不传 task-id 时找最新活跃任务）
 ```
 
@@ -67,8 +69,9 @@ task.manifest.json   任务清单（workflow/task-id/task-desc/user_confirmed）
 checkpoint.json      阶段状态（current_stage/completed_stages/approved_stages/executor 标记）
 task.md / design.md / task-plan.md / changes.md / test-report.md / review-report.md / lessons-draft.md
 stage-result.json    当前阶段结果（子代理落盘）
+stage-runs/          run-stage 的 spawn 执行日志（含子代理原始 stdout/stderr）
 skill-logs/          阶段 skill 执行记录（编排器程序化记账）
-tool-actions/        全局按日工具日志（task_id 标注，context-snapshot 按任务过滤）
+tool-actions/        全局按日工具日志（task_id 标注，审计留痕）
 review-brief.md      任务完成时自动生成的审核简报
 ```
 
@@ -76,7 +79,7 @@ review-brief.md      任务完成时自动生成的审核简报
 
 - **全局按日**：`.harness/workspace/tool-actions/YYYY-MM-DD.log`，每条带 `task_id`
 - **只记主代理**：子代理的调用 hook 记录不到（实测），子代理能读什么由 prompt + 交接文档限定
-- context-snapshot 按 `task_id` 过滤生成已读清单（脚本查询，不耗 token）
+- context-ledger 已移除（2026-08-20）：subagent 隔离后上下文可控，工具日志仅作审计留痕
 
 ## 与 CLI 版的关系
 

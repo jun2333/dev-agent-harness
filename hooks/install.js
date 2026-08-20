@@ -60,12 +60,21 @@ function buildJsonHooks(scope, gateEvent) {
       },
     ],
   };
+  const approveGroup = {
+    matcher: 'Bash',
+    hooks: [{ type: 'command', command: cmd('approve-guard.js'), name: 'harness-approve-guard', timeout: 10, statusMessage: 'harness: 审批确认码门禁' }],
+  };
   const gateGroup = {
     matcher: 'Write|Edit',
     hooks: [{ type: 'command', command: cmd('gate-check.js'), name: 'harness-gate-check', timeout: 10, statusMessage: 'harness: 阶段产出校验' }],
   };
+  // route-mode 已移除（2026-08-20 用户要求）：进编排层靠提示词引导用户显式 harness start，
+  // 不再强制选模式。进入后流程由编排器引擎控制。
+  hooks.PreToolUse = [];
+  // approve-guard 必须 PreToolUse（Bash 命令执行前拦截无码审批），所有宿主一致
+  hooks.PreToolUse.push(approveGroup);
   if (gateEvent === 'PreToolUse') {
-    hooks.PreToolUse = [gateGroup];
+    hooks.PreToolUse.push(gateGroup);
   } else {
     hooks.PostToolUse.push(gateGroup);
   }
@@ -77,6 +86,7 @@ function buildJsonHooks(scope, gateEvent) {
 function tomlHookLines() {
   const lines = ['# Harness hooks（由 .harness/hooks/install.js 生成，勿手改）'];
   const events = [
+    ['PreToolUse', 'Bash', 'approve-guard.js', false, 10],
     ['PostToolUse', 'Bash|Write|Edit|apply_patch', 'post-tool-log.js', true, null],
     ['PostToolUse', 'Bash', 'check-verify.js', false, 10],
     ['PostToolUse', 'Write|Edit', 'gate-check.js', false, 10],
@@ -265,7 +275,8 @@ function main() {
     }
   }
   console.log('\n注册的 hook：');
-  console.log('  PostToolUse(Bash|Write|Edit|apply_patch) -> post-tool-log.js（异步记账）');
+  console.log('  PreToolUse(Bash)                          -> approve-guard.js（审批确认码门禁）');
+  console.log('  PostToolUse(Bash|Write|Edit|apply_patch)  -> post-tool-log.js（异步记账）');
   console.log('  PostToolUse(Bash)                         -> check-verify.js（绕过提醒）');
   console.log('  gate-check.js（产出校验）挂载点按宿主区分：');
   console.log('    claude/qoder/codex: PostToolUse(Write|Edit)   —— PostToolUse exit 2 阻断，校验落盘结果');

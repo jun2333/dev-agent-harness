@@ -29,8 +29,6 @@ stages:
       - skill: skills/framework/state-checkpoint.md
         action: save
       - action: skill-log
-      - skill: skills/framework/context-snapshot.md
-        action: run
 
   - name: implementing
     executor: subagent
@@ -47,8 +45,6 @@ stages:
       - skill: skills/framework/state-checkpoint.md
         action: save
       - action: skill-log
-      - skill: skills/framework/context-snapshot.md
-        action: run
 
   - name: testing
     executor: subagent
@@ -67,8 +63,6 @@ stages:
       - skill: skills/framework/state-checkpoint.md
         action: save
       - action: skill-log
-      - skill: skills/framework/context-snapshot.md
-        action: run
 
   - name: reviewing
     executor: subagent
@@ -87,8 +81,6 @@ stages:
       - skill: skills/framework/state-checkpoint.md
         action: save
       - action: skill-log
-      - skill: skills/framework/context-snapshot.md
-        action: run
 
   - name: reflecting
     executor: inline

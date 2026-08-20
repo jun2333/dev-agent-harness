@@ -34,7 +34,7 @@ function buildSubagentPrompt(ins, ctx) {
     '```',
     'sections_ok 必须如实填写（编排器会独立机械检查产出物，不采信此字段）。',
     `6. 读取范围限制（任务隔离）：只允许读取 本任务目录（.harness/workspace/${ctx.taskId}/）、项目源码、.harness/skills/、.harness/workflows/；禁止读取 .harness/workspace/ 下其他任务目录（如 task-001/、其他 task-id 目录）——跨任务读取会造成污染`,
-    `7. **禁止运行 skill-log.js / context-snapshot.js**（node .harness/tools/...）：编排器会在阶段推进时程序化执行记账（skill-logs / context-ledger），子代理不需要也不应该自己运行，避免路径/格式冲突`,
+    `7. **禁止运行 skill-log.js**（node .harness/tools/...）：编排器会在阶段推进时程序化执行记账（skill-logs），子代理不需要也不应该自己运行，避免路径/格式冲突`,
   ].filter(Boolean).join('\n');
 }
 

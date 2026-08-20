@@ -58,21 +58,7 @@
 
 ## Context Ledger（上下文追踪）
 
-已读清单由 `tools/context-snapshot.js` **确定性生成**（基于 tool-actions.log 的真实工具调用记录，非 LLM 自觉记账）。每阶段结束后自动刷新（workflow post_stage 钩子）。
-
-### 记录位置
-`workspace/{task-id}/context-ledger.md`（人类可读）+ `context-ledger.json`（机器可读）
-
-### 记录内容
-| 文件 | 读取次数 | 估算 token | 来源 |
-|------|---------|-----------|------|
-| src/components/LoginForm.tsx | 2 | ~1.2K | Bash |
-
-### 使用规则
-- 每个 skill 执行前，读取 context-ledger.md 的已读文件表——**已读的文件不重复读取**（除非内容已变更，需用 git 或时间戳确认）
-- 关注累计 token 估算：超出预算时压缩后续读取（优先精读小文件、用 grep 定位代替全文件读取）
-- **不手动向 context-ledger.md 追加记录**——它由 context-snapshot.js 从 tool-actions.log 生成，手写会污染事实
-- harness.md 本身只需读一次，记录后不再重复读
+已移除（2026-08-20 用户要求）：使用 subagent 隔离后，子代理上下文由阶段 prompt 的输入白名单程序化控制（"精准上下文"从管理变成构造），不再需要已读清单防重复读取；主代理工具调用由 `post-tool-log.js` 确定性记录到 `tool-actions/` 按日日志（带 task_id），作为审计留痕。跨阶段防重读依赖产出物摘要传递。
 
 ## 技能执行留痕
 
