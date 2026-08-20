@@ -86,7 +86,7 @@ stages:
     executor: inline
     skill: skills/framework/reflecting.md
     sub_command: reflect
-    input: [task.md, task-plan.md, test-report.md, review-report.md, execution-log.md]
+    input: [task.md, task-plan.md, test-report.md, review-report.md]
     output: lessons-draft.md
     sections: []
     require_verify: false

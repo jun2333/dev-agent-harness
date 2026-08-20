@@ -5,15 +5,16 @@
  *
  * 让"进编排层还是自然对话"成为用户的一步显式选择：
  *   harness workflows                      列出可用工作流（来自 knowledge/plugins/）
- *   harness start --workflow <name> --desc "<任务>" [--task-id <id>]
- *                                         -> 建 workspace/<id>/task.md + task.manifest.json
- *                                            + 调 orchestrator/core.js start（落 active-task 标记）
+ *   harness start --workflow <name> --task-id <id> --desc "<任务>" [--desc-user-provided]
+ *                                         -> 建 workspace/<id>/task.md + task.manifest.json（不含 user_confirmed）
+ *                                            + 调 orchestrator/core.js start（未确认会被拒绝并生成确认码）
  *   harness off                            切自然对话模式（写 .harness/.harness-off，免编排）
  *   harness on                             恢复：清掉自然标记 + 活跃任务标记
  *   harness status                         当前处于哪种模式
  *
  * 进编排层靠用户显式执行 harness start（提示词引导，无 PreToolUse 拦截）；
- * 一旦进入，流程由编排器引擎控制（run-stage / validate / approve --code / advance 状态机）。
+ * task-id 与任务描述必须由用户提供（agent/脚本禁止自动生成）：orchestrator start 对未确认
+ * 的 manifest 抛错并生成一次性确认码，强制 agent 走 AskUserQuestion 让用户确认后再落盘确认标记。
  */
 
 const fs = require('fs');
@@ -68,14 +69,22 @@ function cmdStart(root, workflow, desc, taskId) {
     console.error('start 需要 --workflow <name>（先用 harness workflows 查看）。');
     process.exit(1);
   }
+  if (!taskId || !taskId.trim()) {
+    console.error(
+      '[harness] start 需要 --task-id <id>：任务标识必须由用户提供，不允许自动生成。' +
+        '请让用户指定任务标识（可与 --desc 一起经 AskUserQuestion 确认）后重试。'
+    );
+    process.exit(1);
+  }
   if (!desc || !desc.trim()) {
     console.error(
-      '[harness] start 需要 --desc "<任务描述>"：任务描述必须来自用户确认的真实内容，不允许自动生成占位。' +
-        '请先向用户确认要做什么，再用用户的话作为 --desc。'
+      '[harness] start 需要 --desc "<任务描述>"：任务描述必须由用户提供（用户原文），不允许自动生成占位。' +
+        '请先让用户写下要做什么，再用用户的话作为 --desc。'
     );
     process.exit(1);
   }
   desc = desc.trim();
+  taskId = taskId.trim();
   let def;
   try {
     def = loadWorkflowDefinition(root, workflow);
@@ -83,7 +92,7 @@ function cmdStart(root, workflow, desc, taskId) {
     console.error('[harness] ' + e.message);
     process.exit(1);
   }
-  const id = taskId || `${workflow}-${Date.now().toString(36)}`;
+  const id = taskId; // task-id 强制用户提供，不自动生成
   const tdir = path.join(root, '.harness', 'workspace', id);
   fs.mkdirSync(tdir, { recursive: true });
   fs.writeFileSync(
@@ -95,8 +104,10 @@ function cmdStart(root, workflow, desc, taskId) {
     JSON.stringify(
       {
         workflow,
+        task_id: id,
         task_desc: desc || '',
-        user_confirmed: true, // 用户显式运行 harness start 即视为确认（替代 AskUserQuestion）
+        // 不自动置 user_confirmed：由 orchestrator start 强校验（缺该字段即抛错 + 生成确认码），
+        // 强制 agent 先经 AskUserQuestion 让用户确认 task-id/task-desc，再落盘确认标记后重新 start。
         created_at: new Date().toISOString(),
       },
       null,
@@ -109,7 +120,12 @@ function cmdStart(root, workflow, desc, taskId) {
       stdio: 'inherit',
     });
   } catch (e) {
-    console.error('[harness] orchestrator start 失败：' + (e.message || e));
+    console.error(
+      `\n[harness] 任务 ${id} 已创建但未确认（orchestrator start 拒绝启动）。` +
+        `请按上方 [orchestrator] 提示（含一次性确认码）用 AskUserQuestion 让用户确认 task-id / task-desc，` +
+        `确认后将 workspace/${id}/task.manifest.json 的 user_confirmed 置为 true，` +
+        `再按提示重跑对应命令。`
+    );
     process.exit(1);
   }
   console.log(

@@ -259,7 +259,6 @@ Skill 分为两类（仓库根的 `skills/` 按职责分五组：`framework/`、
 - 任务计划（task-plan.md）
 - 测试报告（test-report.md）
 - 审查报告（review-report.md）
-- 执行日志（execution-log.md）
 
 ### 执行步骤
 1. 回顾任务执行全过程
@@ -596,7 +595,7 @@ stages:
   - name: reflecting
     skill: skills/reflecting.md
     sub_command: reflect                  # 阶段一：自动复盘
-    input: [task.md, design.md, task-plan.md, test-report.md, review-report.md, execution-log.md]
+    input: [task.md, design.md, task-plan.md, test-report.md, review-report.md]
     output: [lessons-draft.md, skill-improvements-draft.md]
     post_stage:
       - skill: skills/state-checkpoint.md

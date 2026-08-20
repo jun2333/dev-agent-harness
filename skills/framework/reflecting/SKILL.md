@@ -30,7 +30,6 @@ description: 项目复盘 + 经验收集。阶段一自动触发：workflow 最�
 - workspace/{task-id}/task-plan.md
 - workspace/{task-id}/test-report.md
 - workspace/{task-id}/review-report.md
-- workspace/{task-id}/execution-log.md
 
 ### 语义判断（基于上述输入推断，标注依据）
 - 哪些经验值得沉淀（基于问题的影响面和复用概率）

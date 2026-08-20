@@ -154,30 +154,15 @@ function writeSkillLog(root, taskId, stageName, stage) {
 
 // ---------------------------------------------------------------- start
 
-function cmdStart(root, taskId) {
+function cmdStart(root, taskId, code) {
   const tdir = taskDir(root, taskId);
   const manifest = readJson(path.join(tdir, 'task.manifest.json'));
   if (!manifest || !manifest.workflow) {
     console.error(`[orchestrator] 缺少 ${path.join('workspace', taskId, 'task.manifest.json')}：请先走启动会话（确认工作流 + task-id/task-desc 后落盘 manifest）`);
     process.exit(1);
   }
-  // 启动会话程序化强制：manifest 必须带人工确认标记（防止桥擅自用推荐值落盘跳过确认）
-  if (!manifest.user_confirmed) {
-    console.error(
-      `[orchestrator] manifest 缺少 user_confirmed: true——任务启动必须经人工确认（工作流 / task-id / task-desc 三件事，AskUserQuestion 问齐后落盘）。` +
-        `请走完整启动会话后写 task.manifest.json（含 user_confirmed: true），再 start。`
-    );
-    process.exit(1);
-  }
-  let wfDef;
-  try {
-    wfDef = loadWorkflowDefinition(root, manifest.workflow);
-  } catch (e) {
-    console.error(`[orchestrator] ${e.message}`);
-    process.exit(1);
-  }
 
-  // 建 checkpoint（幂等：已存在则不覆盖）
+  // 提前建 checkpoint（幂等），用于存放 start 的一次性确认码
   let cp = loadCheckpoint(root, taskId);
   if (!cp) {
     let gitCommit = 'HEAD';
@@ -198,6 +183,53 @@ function cmdStart(root, taskId) {
       executor: 'orchestrator', // 强制标记：本任务由编排器驱动（gate-check 据此识别）
     };
     writeJson(path.join(tdir, 'checkpoint.json'), cp);
+  }
+
+  // 启动参数（task-id / task-desc）禁止自动生成：未确认则生成一次性确认码并拒绝（exit 2）
+  if (!manifest.user_confirmed) {
+    if (!cp.pending_confirm || cp.pending_confirm.stage !== 'start') {
+      cp.pending_confirm = { code: generateConfirmCode(), stage: 'start', created_at: new Date().toISOString() };
+      writeJson(path.join(tdir, 'checkpoint.json'), cp);
+    }
+    out({
+      ok: false,
+      confirm_required: true,
+      confirm_code: cp.pending_confirm.code,
+      task_id: taskId,
+      message:
+        `任务启动参数必须由用户提供，禁止 agent/脚本自动生成。当前 task-id=${taskId}、task-desc=「${manifest.task_desc || '(空)'}」未经用户确认。` +
+        `请用 AskUserQuestion 让用户提供/确认 task-id 与 task-desc（用用户原文），` +
+        `将 workspace/${taskId}/task.md 与 task.manifest.json 的 task_id/task_desc 更新为用户原文、user_confirmed 置为 true，` +
+        `再执行 core.js start --task-id ${taskId} --code ${cp.pending_confirm.code}（确认码一次性）。`,
+    });
+    process.exit(2); // CONFIRM_REQUIRED
+  }
+
+  // 已确认：必须携带与 pending_confirm 匹配的一次性确认码（防 agent 跳过 AskUserQuestion 直接改 manifest）
+  const pc = cp.pending_confirm;
+  if (pc && pc.stage === 'start') {
+    if (!code || pc.code !== code) {
+      out({
+        ok: false,
+        confirm_required: true,
+        confirm_code: pc.code,
+        message:
+          `确认码不匹配或缺失：start 需要 --code ${pc.code}（该确认码只能经 AskUserQuestion 用户确认后取得，` +
+          `证明 task-id/task-desc 已由用户确认）。`,
+      });
+      process.exit(2);
+    }
+    cp.pending_confirm = null; // 一次性：使用后清除
+    writeJson(path.join(tdir, 'checkpoint.json'), cp);
+  }
+  // 无 pending_confirm（历史任务）且 user_confirmed 已置位：兼容放行
+
+  let wfDef;
+  try {
+    wfDef = loadWorkflowDefinition(root, manifest.workflow);
+  } catch (e) {
+    console.error(`[orchestrator] ${e.message}`);
+    process.exit(1);
   }
 
   // 初始阶段 = 第一个非 optional 阶段
@@ -585,8 +617,8 @@ function main() {
   switch (cmd) {
     case 'start': {
       const taskId = getArg('task-id');
-      if (!taskId) { console.error('Usage: node core.js start --task-id <id>'); process.exit(1); }
-      cmdStart(root, taskId);
+      if (!taskId) { console.error('Usage: node core.js start --task-id <id> [--code <确认码>]'); process.exit(1); }
+      cmdStart(root, taskId, getArg('code'));
       break;
     }
     case 'next': {
