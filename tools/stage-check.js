@@ -7,7 +7,7 @@
  * stage 参数可注入：
  *   - gate-check（写入时）：从 checkpoint 填 stage/output
  *   - orchestrator validate（交卷时）：从命令行/checkpoint 填 stage，从 stage-result.json 填 output
- * 两处消费同一份代码 + 同一份插件包定义（workflow.yaml），杜绝实现漂移。
+ * 两处消费同一份代码 + 同一份工作流定义（workflow.yaml），杜绝实现漂移。
  *
  * 纯字符串匹配 + 文件 IO，无 LLM 参与。
  */
@@ -29,7 +29,7 @@ function readJson(file) {
  * @param {string} opts.root        项目根
  * @param {string} opts.taskId      任务目录名
  * @param {string} opts.stage       阶段名（gate 从 checkpoint 填，validate 从命令行填）
- * @param {object|null} opts.wfDef  插件包定义（loadWorkflowDefinition 结果）
+ * @param {object|null} opts.wfDef  工作流定义（loadWorkflowDefinition 结果）
  * @param {string} opts.output      产出物文件名（相对 workspace/{taskId}/）
  * @param {string|null} opts.contentOverride  待写入内容（PreToolUse 用，文件未落盘）；null 则读实际文件
  * @param {string[]|null} opts.verifyCommands 工作流 verify 解析出的命令集（require_verify 阶段对账用）
@@ -37,7 +37,7 @@ function readJson(file) {
  */
 function checkStage({ root, taskId, stage, wfDef, output, contentOverride, verifyCommands }) {
   const st = wfDef && wfDef.stages[stage];
-  // 未知阶段 / 无插件包定义 / 未声明 sections → 不做硬校验（兼容旧任务与 optional 阶段）
+  // 未知阶段 / 无工作流定义 / 未声明 sections → 不做硬校验（兼容旧任务与 optional 阶段）
   if (!st || !Array.isArray(st.sections)) return [];
 
   const failures = [];

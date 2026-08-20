@@ -29,9 +29,9 @@ function makeTempProject(pool, report, taskId = 't1') {
   return root;
 }
 
-test('loadWorkflowDefinition：feature 插件包 designing 必含 Summary、testing 要求 verify', () => {
+test('loadWorkflowDefinition：feature 工作流 designing 必含 Summary、testing 要求 verify', () => {
   const def = loadWorkflowDefinition(REPO_ROOT, 'feature');
-  assert.ok(def, '应能加载 feature 插件包');
+  assert.ok(def, '应能加载 feature 工作流');
   assert.deepStrictEqual(def.stages.designing.sections[0], ['## Summary for downstream']);
   assert.strictEqual(def.stages.designing.require_verify, false);
   assert.strictEqual(def.stages.testing.require_verify, true);
@@ -41,15 +41,15 @@ test('loadWorkflowDefinition：feature 插件包 designing 必含 Summary、test
   assert.deepStrictEqual(def.verify.checks, ['unit', 'lint']);
 });
 
-test('loadWorkflowDefinition：skill-creation 插件包 verify 用 skill-check（不依赖项目命令）', () => {
+test('loadWorkflowDefinition：skill-creation 工作流 verify 用 skill-check（不依赖项目命令）', () => {
   const def = loadWorkflowDefinition(REPO_ROOT, 'skill-creation');
   assert.ok(def);
   assert.deepStrictEqual(def.verify.checks, ['skill-check']);
   assert.strictEqual(def.stages.testing.require_verify, true);
 });
 
-test('loadWorkflowDefinition：不存在的插件包抛错', () => {
-  assert.throws(() => loadWorkflowDefinition(REPO_ROOT, 'not-exist'), /未找到工作流插件/);
+test('loadWorkflowDefinition：不存在的工作流抛错', () => {
+  assert.throws(() => loadWorkflowDefinition(REPO_ROOT, 'not-exist'), /未找到工作流/);
 });
 
 test('resolveVerifyCommands：命令池 key 解析（unit → 具体命令）', () => {
@@ -58,10 +58,10 @@ test('resolveVerifyCommands：命令池 key 解析（unit → 具体命令）', 
   assert.deepStrictEqual(resolveVerifyCommands(root, wfDef), ['npm test', 'npm run lint']);
 });
 
-test('resolveVerifyCommands：插件包 check/ 脚本解析（无需项目命令池）', () => {
+test('resolveVerifyCommands：工作流 check/ 脚本解析（无需项目命令池）', () => {
   const root = makeTempProject({});
-  // 插件 check/ 脚本放在项目知识库 knowledge/plugins/{workflow}/check/（唯一来源）
-  const checkDir = path.join(root, 'knowledge', 'plugins', 'demo-flow', 'check');
+  // 工作流 check/ 脚本放在项目知识库 knowledge/workflow/{workflow}/check/（唯一来源）
+  const checkDir = path.join(root, 'knowledge', 'workflow', 'demo-flow', 'check');
   fs.mkdirSync(checkDir, { recursive: true });
   fs.writeFileSync(path.join(checkDir, 'demo-check.js'), 'console.log("ok");');
   const wfDef = { name: 'demo-flow', verify: { checks: ['demo-check'] } };
@@ -135,26 +135,26 @@ test('checkVerifyEvidence 未 passed 直接失败', () => {
   assert.ok(failures.some((f) => /未通过/.test(f)));
 });
 
-// ---------- 项目层插件机制（第二批） ----------
+// ---------- 项目层工作流机制（第二批） ----------
 
 const { listWorkflows } = require('../hooks/gate-check.js');
 
 /** 建含通用层 + 项目层工作流的临时项目根 */
-// 建只有项目层插件的临时项目（knowledge/plugins/，唯一插件来源）
+// 建只有项目层工作流的临时项目（knowledge/workflow/，唯一工作流来源）
 function makeProjectWithPlugins(...names) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'harness-plug-'));
   for (const name of names) {
-    const projDir = path.join(root, 'knowledge/plugins', name);
+    const projDir = path.join(root, 'knowledge/workflow', name);
     fs.mkdirSync(projDir, { recursive: true });
     fs.writeFileSync(
       path.join(projDir, 'workflow.yaml'),
-      `name: ${name}\ndescription: 项目插件\nverify:\n  checks: [unit, coverage]\nstages:\n  - name: implementing\n    skill: knowledge/skills/implementing/SKILL.md\n    output: changes.md\n    sections:\n      - [## Summary for downstream]\n      - [## Project Marker]\n`
+      `name: ${name}\ndescription: 项目工作流\nverify:\n  checks: [unit, coverage]\nstages:\n  - name: implementing\n    skill: knowledge/skills/implementing/SKILL.md\n    output: changes.md\n    sections:\n      - [## Summary for downstream]\n      - [## Project Marker]\n`
     );
   }
   return root;
 }
 
-test('loadWorkflowDefinition：项目层插件加载（source=project）', () => {
+test('loadWorkflowDefinition：项目层工作流加载（source=project）', () => {
   const root = makeProjectWithPlugins('feature');
   const def = loadWorkflowDefinition(root, 'feature');
   assert.ok(def);
@@ -162,9 +162,9 @@ test('loadWorkflowDefinition：项目层插件加载（source=project）', () =>
   assert.deepStrictEqual(def.verify.checks, ['unit', 'coverage']);
 });
 
-test('loadWorkflowDefinition：无项目插件时抛错（边界检查，不再回退通用模板）', () => {
+test('loadWorkflowDefinition：无项目工作流时抛错（边界检查，不再回退通用模板）', () => {
   const root = makeProjectWithPlugins('other');
-  assert.throws(() => loadWorkflowDefinition(root, 'feature'), /未找到工作流插件/);
+  assert.throws(() => loadWorkflowDefinition(root, 'feature'), /未找到工作流/);
 });
 
 test('loadWorkflowDefinition：项目独有工作流只在项目层解析，缺失抛错', () => {
@@ -172,15 +172,15 @@ test('loadWorkflowDefinition：项目独有工作流只在项目层解析，缺�
   const def = loadWorkflowDefinition(root, 'release-flow');
   assert.ok(def);
   assert.strictEqual(def.source, 'project');
-  assert.throws(() => loadWorkflowDefinition(root, 'nope'), /未找到工作流插件/);
+  assert.throws(() => loadWorkflowDefinition(root, 'nope'), /未找到工作流/);
 });
 
-test('loadWorkflowDefinition：knowledge/plugins 目录缺失时抛错（边界检查）', () => {
+test('loadWorkflowDefinition：knowledge/workflow 目录缺失时抛错（边界检查）', () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'harness-plug-'));
-  assert.throws(() => loadWorkflowDefinition(root, 'feature'), /未找到项目插件目录/);
+  assert.throws(() => loadWorkflowDefinition(root, 'feature'), /未找到项目工作流目录/);
 });
 
-test('listWorkflows：只列项目层插件', () => {
+test('listWorkflows：只列项目层工作流', () => {
   const root = makeProjectWithPlugins('feature', 'bugfix');
   const workflows = listWorkflows(root);
   const names = workflows.map((w) => w.name);

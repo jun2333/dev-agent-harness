@@ -1,23 +1,23 @@
 #!/usr/bin/env node
 
 /**
- * gate-check.js — 阶段门禁校验（按工作流插件包定义，PreToolUse exit 2 阻断工具调用）
+ * gate-check.js — 阶段门禁校验（按工作流定义，PreToolUse exit 2 阻断工具调用）
  *
  * 注册：PreToolUse 匹配 Write|Edit（写产出物前校验，阻断不合规写入）+ Stop（任务收尾终检）
  *       （Claude Code 等宿主注册在 PostToolUse，脚本双事件兼容）
  * 设计依据：
- *   - 产出物要求（sections/require_verify）**不再硬编码**，从工作流插件包
- *     .harness/workflows/{workflow}/workflow.yaml 加载（workflow-plugin 机制，单一真相源）
+ *   - 产出物要求（sections/require_verify）**不再硬编码**，从工作流
+ *     .harness/workflows/{workflow}/workflow.yaml 加载（workflow 机制，单一真相源）
  *   - WorkBuddy/CodeBuddy 契约中 PostToolUse exit 2 不阻断，仅 PreToolUse 能真正阻止写入
  * 校验：
- *   1. 当前阶段产出物包含该阶段必含区块（来自插件包定义的 sections）
+ *   1. 当前阶段产出物包含该阶段必含区块（来自工作流定义的 sections）
  *   2. testing / reviewing 阶段（require_verify）必须存在 verify 证据
  *      （verification-result.json 且 passed），且证据命令与工作流 verify 声明解析出的
  *      命令集对账（他证）：命令必须来自工作流 verify checks（内置 check / 项目命令池），
  *      配置命令全量执行、无配置外命令
  * 失败：PreToolUse 时 exit 2 + stderr 列出缺失项，阻断写入并反馈给 LLM 补齐；
  *       Stop 时只发提醒不阻塞（避免用户中途退出会话被卡住）
- * 容错：不在 harness 任务中（无 checkpoint）→ exit 0；工作流插件包缺失 → 降级不阻塞（stderr 提示）；
+ * 容错：不在 harness 任务中（无 checkpoint）→ exit 0；工作流缺失 → 降级不阻塞（stderr 提示）；
  *       checkpoint.json 自身写入跳过校验
  */
 
@@ -104,8 +104,8 @@ function main() {
   try {
     wfDef = loadWorkflowDefinition(root, checkpoint.workflow);
   } catch (e) {
-    // 插件缺失时降级不阻塞写入（gate-check 是兜底，避免旧任务/未复制插件时卡死）
-    process.stderr.write(`[harness gate] 工作流插件包加载失败：${e.message}（已降级，不阻塞写入）\n`);
+    // 工作流缺失时降级不阻塞写入（gate-check 是兜底，避免旧任务/未复制工作流时卡死）
+    process.stderr.write(`[harness gate] 工作流加载失败：${e.message}（已降级，不阻塞写入）\n`);
   }
 
   // 解析 verify 命令集（require_verify 阶段用）；解析失败按门禁失败处理

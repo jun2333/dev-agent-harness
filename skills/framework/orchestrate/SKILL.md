@@ -16,7 +16,7 @@ description: 编排桥（编排器模式的主 agent 引导）。把编排器 ne
 
 **用户下达的开发/分析任务，默认必须走编排器**（启动会话 → start → 阶段循环）——这是目标执行路径（流程状态机在程序里，可靠性远高于 LLM 自觉执行）。
 
-- **必须走编排器**：涉及多阶段、有明确产出物、需要用户审批的任务（feature / bugfix / refactor / requirements / skill-creation / workflow-creation）
+- **必须走编排器**：涉及多阶段、有明确产出物、需要用户审批的任务（feature / bugfix / requirements / skill-creation / workflow-creation）
 - **可跳过编排器**：仅限简单单步操作（改一个配置、修一个 typo、回答一个问题）——复杂度判断标准见项目 AGENTS.md
 - CLI 版（LLM 自读 workflow 自觉执行）已降级：编排器任务的 checkpoint 带 `executor: orchestrator` 标记，gate-check 在收尾时会提示未走编排器的任务
 
@@ -26,7 +26,7 @@ description: 编排桥（编排器模式的主 agent 引导）。把编排器 ne
 
 用户下达任务时：
 
-1. 语义判断任务类型 → 给出候选工作流（feature / bugfix / refactor / skill-creation / workflow-creation / 项目自定义）
+1. 语义判断任务类型 → 给出候选工作流（feature / bugfix / skill-creation / workflow-creation / 项目自定义）
 2. 用 AskUserQuestion 一次问齐：
    - **工作流确认**：展示你的判断 + 候选列表，用户选择/纠正
    - **task-id**：用户输入或确认 kebab-case 标识

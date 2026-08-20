@@ -1,12 +1,12 @@
 ---
 name: workflow-implement
-description: 工作流插件包实施阶段。按设计方案编写 workflow.yaml 与 check 脚本，产出自包含插件包。
+description: 工作流实施阶段。按设计方案编写 workflow.yaml 与 check 脚本，产出自包含工作流。
 ---
 
-# Workflow Implement（创建插件的插件 · 实施）
+# Workflow Implement（创建工作流的流程 · 实施）
 
 ## Overview
-工作流编写员。根据设计文档，编写符合 workflow-schema 规范的插件包。
+工作流编写员。根据设计文档，编写符合 workflow-schema 规范的工作流。
 
 ## 输入
 - 用户的任务描述（task.md）
@@ -14,9 +14,9 @@ description: 工作流插件包实施阶段。按设计方案编写 workflow.yam
 
 ## 执行步骤
 1. 读取 design.md，确认关键结论
-2. 参考现有插件包格式（读取 1-2 个同类工作流）：
+2. 参考现有工作流格式（读取 1-2 个同类工作流）：
    - `.harness/workflows/{feature|skill-creation}/workflow.yaml`
-3. 创建插件包目录：`.harness/workflows/{name}/`
+3. 创建工作流目录：`.harness/workflows/{name}/`
 4. 编写 workflow.yaml：
    - name（kebab-case，与目录一致）+ description
    - verify.checks（测试手段声明）

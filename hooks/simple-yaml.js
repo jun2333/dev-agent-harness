@@ -3,7 +3,7 @@
 /**
  * simple-yaml.js — 零依赖 YAML 子集解析器（仅用于 harness workflow.yaml）
  *
- * 动机：gate-check.js / verify.js 需要读取工作流插件包的 workflow.yaml，
+ * 动机：gate-check.js / verify.js 需要读取工作流工作流的 workflow.yaml，
  * 但 hook 运行环境（WorkBuddy/CLI 沙箱）不能假设 node_modules 已安装，
  * 因此提供零依赖的最小 YAML 解析，覆盖 harness workflow 定义用到的子集：
  *   - 缩进块：map（key: value）、list（- item，item 可为 map/标量）

@@ -10,17 +10,17 @@ const REQUIREMENTS_YAML = fs.readFileSync(
   path.join(__dirname, '..', 'workflows', 'requirements', 'workflow.yaml'), 'utf8'
 );
 
-/** 建临时 harness 项目，requirements 插件放项目知识库 + 复制 check 脚本 */
+/** 建临时 harness 项目，requirements 工作流放项目知识库 + 复制 check 脚本 */
 function makeTempProject() {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'harness-reqflow-'));
   const harness = path.join(root, '.harness');
   fs.mkdirSync(path.join(harness, 'orchestrator'), { recursive: true });
-  const pluginDir = path.join(root, 'knowledge', 'plugins', 'requirements');
-  fs.mkdirSync(pluginDir, { recursive: true });
-  fs.writeFileSync(path.join(pluginDir, 'workflow.yaml'), REQUIREMENTS_YAML);
+  const workflowDir = path.join(root, 'knowledge', 'workflow', 'requirements');
+  fs.mkdirSync(workflowDir, { recursive: true });
+  fs.writeFileSync(path.join(workflowDir, 'workflow.yaml'), REQUIREMENTS_YAML);
   fs.cpSync(
     path.join(__dirname, '..', 'workflows', 'requirements', 'check'),
-    path.join(pluginDir, 'check'),
+    path.join(workflowDir, 'check'),
     { recursive: true }
   );
   fs.writeFileSync(path.join(harness, 'orchestrator', 'config.json'), JSON.stringify({ subagent: 'bridge' }));

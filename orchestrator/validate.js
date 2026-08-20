@@ -12,7 +12,7 @@
  * 参数全部从文件读（全局约束：禁止 LLM 传参）：
  *   - checkpoint.json        → current_stage / workflow / stage_outputs
  *   - stage-result.json      → 子代理落盘的 JSON 摘要
- *   - workflow 插件包定义     → loadWorkflowDefinition
+ *   - workflow 工作流定义     → loadWorkflowDefinition
  */
 
 const path = require('path');

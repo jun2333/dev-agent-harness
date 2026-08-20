@@ -25,7 +25,7 @@
 ┌─────────────────────────────────────────┐
 │         Harness 仓库（本仓库）            │
 │                                         │
-│  workflows/       工作流插件包（模板）    │
+│  workflows/       工作流（模板）    │
 │  skills/          通用技能                │
 │  context-rules/   上下文加载策略          │
 │  skill-interface.md  Skill 接口规范       │
@@ -40,7 +40,7 @@
 │                                         │
 │  knowledge/                             │
 │  ├── skills/      项目定制的阶段技能      │
-│  ├── plugins/     项目定制的工作流插件包  │
+│  ├── workflow/     项目定制的工作流  │
 │  ├── standards/   项目编码规范            │
 │  ├── patterns/    项目最佳实践            │
 │  ├── lessons/     项目经验教训            │
@@ -50,26 +50,26 @@
 └─────────────────────────────────────────┘
 ```
 
-- **通用层**（本仓库）：定义工作流插件包（模板）、Skill 接口规范、通用技能、门禁与验证工具。所有项目共用，由 Harness 维护者更新。
-- **项目层**（`knowledge/`）：项目特定的技能实现、**工作流插件实例**（`plugins/`）、编码规范、经验教训。由项目团队 + AI（knowledge-init）共同维护。
-- **工作流 = 插件包**：通用工作流是**模板**（骨架），测试命令/通过标准由项目定制；`knowledge-init workflow-init` 把模板实例化到项目层并增强（见 docs/workflow-plugin-spec.md）。
+- **通用层**（本仓库）：定义工作流（模板）、Skill 接口规范、通用技能、门禁与验证工具。所有项目共用，由 Harness 维护者更新。
+- **项目层**（`knowledge/`）：项目特定的技能实现、**工作流实例**（`workflow/`）、编码规范、经验教训。由项目团队 + AI（knowledge-init）共同维护。
+- **工作流 = 模板 + 项目实例**：通用工作流是**模板**（骨架），测试命令/通过标准由项目定制；`knowledge-init workflow-init` 把模板实例化到项目层并增强（见 docs/workflow-spec.md）。
 
 ## 工作流
 
-内置 6 种工作流（插件包，`workflows/{name}/workflow.yaml`），覆盖常见场景：
+内置 6 种工作流（`workflows/{name}/workflow.yaml`），覆盖常见场景：
 
 | 工作流 | 阶段 | 适用场景 |
 |--------|------|----------|
-| **feature** | 设计 → 计划 → 实施 → 测试 → 审查 → 复盘 → Git | 新功能开发 |
+| **feature** | 前置确认 → 设计 → 计划 → 实施 → 测试 → 审查 → 复盘 → Git | 新功能开发与代码重构 |
 | **bugfix** | 计划 → 实施 → 测试 → 审查 → 复盘 → Git | Bug 修复 |
-| **refactor** | 设计 → 计划 → 实施 → 测试 → 审查 → 复盘 → Git | 代码重构 |
+| **requirements** | 需求采集 → 撰写 → 评审 → 复盘 | 需求脑暴（非代码任务，产出需求文档含验收标准，作为 feature 前置输入） |
 | **project-init** | 初始化 → 复盘 → Git | 从零搭建项目 |
 | **skill-creation** | 设计 → 实施 → 测试 → 复盘 | 创建/重构 harness 技能（非代码任务） |
-| **workflow-creation** | 设计 → 实施 → 测试 → 复盘 | 创建工作流插件包（创建插件的插件） |
+| **workflow-creation** | 设计 → 实施 → 测试 → 复盘 | 创建工作流的流程 |
 
 每个阶段都有明确的输入/输出定义和 gate 控制（需用户确认才能进入下一阶段）。
 
-**工作流 = 插件包**：步骤定义 + 产出物要求（sections）+ 测试手段（verify.checks）自包含在一个目录里；项目可用 `knowledge-init workflow-init` 把模板实例化到 `knowledge/plugins/` 并定制（增删阶段/改 gate/绑项目测试命令）。详见 `docs/workflow-plugin-spec.md`。
+**工作流 = 自包含定义**：步骤定义 + 产出物要求（sections）+ 测试手段（verify.checks）自包含在一个目录里；项目可用 `knowledge-init workflow-init` 把模板实例化到 `knowledge/workflow/` 并定制（增删阶段/改 gate/绑项目测试命令）。详见 `docs/workflow-spec.md`。
 
 ## 通用技能（通用层 `skills/` 分四组）
 
@@ -80,12 +80,14 @@
 | 框架层 | `skills/framework/` | **reflecting** | 项目复盘 + 经验收集。两阶段：自动复盘生成草稿 → 手动收集到知识库 |
 | | | **state-checkpoint** | 状态记录与断点恢复。支持任务中断后从断点继续 |
 | | | **env-check** | 环境就绪检查。pre_task 自动执行，产出环境快照，防止基于错误假设开工 |
+| | | **orchestrate** | 编排桥技能：主 agent 如何按 next → Agent → validate → advance 循环执行 |
+| | | **precondition** | feature 前置条件确认：验收标准来源（需求文档引用或简要需求文档），无则不进入设计 |
 | | | **hook-init** | hook 初始化：安装/接线门禁脚本（gate-check / check-verify） |
 | 技能自举 | `skills/skill-creation/` | **skill-design** | 设计新技能 |
 | | | **skill-evolution** | 技能自成长。汇总 skill-logs，发现技能不足并持续优化 |
 | | | **skill-implement** | 实现技能 |
 | | | **skill-test** | 测试技能 |
-| 工作流自举 | `skills/workflow-creation/` | **workflow-design / workflow-implement / workflow-test** | 设计/实现/测试工作流插件包（创建插件的插件） |
+| 工作流自举 | `skills/workflow-creation/` | **workflow-design / workflow-implement / workflow-test** | 设计/实现/测试工作流（创建工作流的流程） |
 | 工具类 | `skills/tools/` | **knowledge-init** | 知识库初始化与维护。扫描项目代码自动生成规范、模式、阶段技能；`workflow-init` 子命令实例化项目定制工作流 |
 | | | **project-init** | 从零开始的项目初始化（技术选型 + 标准定制 + 脚手架搭建） |
 | | | **tech-audit** | 技术审计 |
@@ -117,7 +119,7 @@ AI 会执行 `knowledge-init scan` 扫描项目代码，生成 `knowledge/` 目�
 knowledge-init workflow-init init feature
 ```
 
-把通用模板实例化到 `knowledge/plugins/{name}/`，绑定项目命令池后按需增强（增删阶段、改 gate、改产出物要求）。详见 `docs/workflow-plugin-spec.md` §4.5。
+把通用模板实例化到 `knowledge/workflow/{name}/`，绑定项目命令池后按需增强（增删阶段、改 gate、改产出物要求）。详见 `docs/workflow-spec.md` §4.5。
 
 ### 3. 开始开发
 
@@ -127,7 +129,7 @@ knowledge-init workflow-init init feature
 实现用户登录注册功能
 ```
 
-AI 将按 设计 → 计划 → 实施 → 测试 → 审查 的流程逐步推进，每个阶段产出结构化文件并等待确认。
+AI 将按 前置确认（验收标准）→ 设计 → 计划 → 实施 → 测试 → 审查 的流程逐步推进，每个阶段产出结构化文件并等待确认。
 
 ### 4. 收集经验
 
@@ -151,27 +153,27 @@ skill-evolution review
 .harness/
 ├── harness.md              # Agent 入口（必读）
 ├── skill-interface.md      # Skill 接口规范
-├── workflow-schema.json    # 工作流插件包 schema（格式校验）
+├── workflow-schema.json    # 工作流 schema（格式校验）
 ├── context-rules/          # 上下文加载策略
 │   ├── file-discovery.md
 │   └── loading-strategy.md
-├── docs/                   # 设计文档（DESIGN.md / workflow-plugin-spec.md）
+├── docs/                   # 设计文档（DESIGN.md / orchestrator-design.md / workflow-spec.md）
 ├── skills/                 # 通用层技能（分组见「通用技能」表）
-│   ├── framework/          # 框架层：reflecting / state-checkpoint / env-check / hook-init
+│   ├── framework/          # 框架层：reflecting / state-checkpoint / env-check / orchestrate / precondition / hook-init
 │   ├── skill-creation/     # 技能自举：skill-design / skill-evolution / skill-implement / skill-test
 │   ├── workflow-creation/  # 工作流自举：workflow-design / workflow-implement / workflow-test
 │   ├── tools/              # 工具类：knowledge-init / project-init / tech-audit
 │   └── domain-templates/   # 框架模板：designing / task-planning / implementing / testing / reviewing
 ├── templates/              # 默认产出模板
-├── tools/                  # 运行时工具：verify.js / env-check.js / workflow-lib.js / workflow-init.js / skill-log.js / review-brief.js / simple-yaml.js
+├── tools/                  # 运行时工具：verify.js / env-check.js / workflow-lib.js / workflow-init.js / skill-log.js / review-brief.js / simple-yaml.js / lessons-apply.js / knowledge-index.js
 ├── hooks/                  # 门禁脚本：gate-check.js / check-verify.js / post-tool-log.js / lib.js / install.js
-├── workflows/              # 工作流插件包（6 个，含 workflow.yaml + check/）
-│   ├── feature/            # 新功能开发
+├── workflows/              # 工作流（6 个，含 workflow.yaml + check/）
+│   ├── feature/            # 新功能开发与代码重构
 │   ├── bugfix/             # Bug 修复
-│   ├── refactor/           # 重构
+│   ├── requirements/       # 需求脑暴（非代码任务）
 │   ├── project-init/       # 项目初始化
 │   ├── skill-creation/     # 创建技能的技能
-│   └── workflow-creation/  # 创建插件的插件（含 check/workflow-check.js）
+│   └── workflow-creation/  # 创建工作流的流程（含 check/workflow-check.js）
 └── workspace/              # 运行时产物（gitignore）
     └── {task-id}/
         ├── task.md
@@ -185,7 +187,7 @@ skill-evolution review
         └── verify/verification-result.json   # 验证证据（他证）
 ```
 
-项目层额外目录：`knowledge/plugins/{name}/`（项目定制工作流插件包，git 跟踪）。
+项目层额外目录：`knowledge/workflow/{name}/`（项目定制工作流，git 跟踪）。
 
 ## 关键特性
 
@@ -196,9 +198,9 @@ skill-evolution review
 - **技能自成长**：通过 skill-log 记录执行情况，持续优化技能
 - **断点恢复**：支持任务中断后从 checkpoint 继续执行
 - **零依赖**：核心产物就是文件，不依赖数据库或复杂框架
-- **工作流插件化**：工作流 = 自包含插件包（步骤+产出要求+测试手段）；通用模板 + 项目定制（`knowledge/plugins/`）；创建插件的插件（workflow-creation）
+- **工作流化**：工作流 = 自包含定义（步骤+产出要求+测试手段）；通用模板 + 项目定制（`knowledge/workflow/`）；创建工作流的流程（workflow-creation）
 - **验证他证**：verify 命令只能来自工作流声明 + 项目命令池（LLM 不能自选），gate 对账证据（文档/技能任务只跑对应 check，不跑项目测试）
-- **门禁宿主适配**：gate-check 按插件包定义校验产出物；WorkBuddy 用 PreToolUse 硬阻断，Claude 等用 PostToolUse
+- **门禁宿主适配**：gate-check 按工作流定义校验产出物；WorkBuddy 用 PreToolUse 硬阻断，Claude 等用 PostToolUse
 
 ## License
 

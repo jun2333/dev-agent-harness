@@ -3,7 +3,7 @@
 /**
  * prompt-builder.js — 阶段指令组装（编排器核心的一部分）
  *
- * 把插件包 stage 定义转成"阶段指令"（结构化数据），adapter 据此生成
+ * 把工作流 stage 定义转成"阶段指令"（结构化数据），adapter 据此生成
  * 子代理 prompt（bridge：主 agent 照抄进 Agent 工具；headless：拼进 spawn 命令）。
  *
  * 全局约束：阶段指令由脚本生成，LLM 不传参、不修改字段。
@@ -13,7 +13,7 @@
  * 组装单个阶段的执行指令。
  * @param {object} opts
  * @param {string} opts.taskId      workspace 目录名
- * @param {object} opts.wfDef       插件包定义（loadWorkflowDefinition 结果）
+ * @param {object} opts.wfDef       工作流定义（loadWorkflowDefinition 结果）
  * @param {string} opts.stageName   阶段名
  * @param {number} opts.stageNo     阶段序号（1-based）
  * @param {number} opts.total       阶段总数

@@ -1,8 +1,8 @@
 name: workflow-creation
-description: 创建或重构 harness 工作流插件包的工作流（创建插件的插件）。按 workflow-plugin-spec 规范产出自包含插件包（workflow.yaml + check 脚本 + templates）。
+description: 创建或重构 harness 工作流的流程（创建工作流的流程）。按 workflow-spec 规范产出自包含工作流（workflow.yaml + check 脚本 + templates）。
 
-# 工作流验证手段（测试手段定义，见 docs/workflow-plugin-spec.md）
-# workflow-check：校验插件包合法性（workflow.yaml 结构/sections/gate/verify 手段可解析）
+# 工作流验证手段（测试手段定义，见 docs/workflow-spec.md）
+# workflow-check：校验工作流合法性（workflow.yaml 结构/sections/gate/verify 手段可解析）
 verify:
   checks: [workflow-check]
 

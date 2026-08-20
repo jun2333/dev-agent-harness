@@ -1,8 +1,8 @@
 {
-  "schema_version": "workflow-plugin.v1",
-  "description": "工作流插件包 schema。校验 .harness/workflows/{name}/workflow.yaml（及项目层 knowledge/plugins/{name}/workflow.yaml）的格式合法性。运行时（gate-check/verify.js）只消费通过本 schema 校验的定义。",
+  "schema_version": "workflow.v1",
+  "description": "工作流 schema。校验 .harness/workflows/{name}/workflow.yaml（及项目层 knowledge/workflow/{name}/workflow.yaml）的格式合法性。运行时（gate-check/verify.js）只消费通过本 schema 校验的定义。",
   "workflow": {
-    "name": { "type": "string", "required": true, "pattern": "^[a-z0-9][a-z0-9-]*$", "note": "kebab-case，与插件包目录名一致" },
+    "name": { "type": "string", "required": true, "pattern": "^[a-z0-9][a-z0-9-]*$", "note": "kebab-case，与工作流目录名一致" },
     "description": { "type": "string", "required": true },
     "verify": {
       "type": "object",

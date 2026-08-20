@@ -1,7 +1,7 @@
 name: skill-creation
 description: 创建或重构 harness 技能的工作流（非代码任务）
 
-# 工作流验证手段（测试手段定义，见 docs/workflow-plugin-spec.md）
+# 工作流验证手段（测试手段定义，见 docs/workflow-spec.md）
 # skill-check：校验技能包结构（SKILL.md/frontmatter/引用完整性），无需项目代码命令
 verify:
   checks: [skill-check]

@@ -1,7 +1,7 @@
 name: project-init
 description: 从零开始的项目初始化流程（技术选型 + 标准定制 + 脚手架搭建）
 
-# 工作流验证手段（测试手段定义，见 docs/workflow-plugin-spec.md）
+# 工作流验证手段（测试手段定义，见 docs/workflow-spec.md）
 # 项目初始化无代码验证阶段，checks 留空
 verify:
   checks: []

@@ -1,15 +1,15 @@
-# 工作流插件规范（Workflow Plugin Spec）
+# 工作流规范（Workflow Spec）
 
-> 把 harness 工作流定义为**自包含插件包**：每个工作流 = 一个目录，内含步骤定义、产出物要求、测试手段定义，插入即用。
-> 本规范是插件包的**设计指南**（格式合法性由 `workflow-schema.json` 强校验）。
+> 把 harness 工作流定义为**自包含工作流**：每个工作流 = 一个目录，内含步骤定义、产出物要求、测试手段定义，插入即用。
+> 本规范是工作流的**设计指南**（格式合法性由 `workflow-schema.json` 强校验）。
 
 ## 1. 目录结构
 
 ```
 .harness/workflows/{name}/            # 通用层（submodule 内，所有项目共享）
-│                                    # 项目层（第二批）：knowledge/plugins/{name}/（项目仓库内）
+│                                    # 项目层（第二批）：knowledge/workflow/{name}/（项目仓库内）
 ├── workflow.yaml                    # 工作流定义（必填）
-├── check/                           # 通用校验脚本（可选，随插件包分发）
+├── check/                           # 通用校验脚本（可选，随工作流分发）
 │   └── *.js                         #   脚本以项目根为 cwd 运行，exit 0 通过
 └── templates/                       # 产出物模板（可选）
 ```
@@ -48,7 +48,7 @@
 
 | 类型 | 写法 | 解析 |
 |------|------|------|
-| **插件包 check 脚本** | `skill-check` / `workflow-check` 等 | 查**当前工作流插件包**的 `check/{name}.js`（项目层优先 → 通用层）——校验脚本随插件包自包含，加新 check 不用改 harness 代码 |
+| **工作流 check 脚本** | `skill-check` / `workflow-check` 等 | 查**当前工作流**的 `check/{name}.js`（项目层优先 → 通用层）——校验脚本随工作流自包含，加新 check 不用改 harness 代码 |
 | **命令池 key** | `unit` / `lint` / `e2e` | 从项目 `knowledge/verify.config.json` 的 `commands` 对象按 key 取实际命令 |
 
 ```yaml
@@ -61,7 +61,7 @@ verify:
   checks: [skill-check]
 ```
 
-**他证原则（不可违背）**：`checks` 只能引用插件包 `check/` 脚本或命令池 key，LLM 不能自选任意命令——验证命令来源必须可审计。
+**他证原则（不可违背）**：`checks` 只能引用工作流 `check/` 脚本或命令池 key，LLM 不能自选任意命令——验证命令来源必须可审计。
 
 ### 命令池格式（knowledge/verify.config.json）
 
@@ -81,30 +81,27 @@ verify:
 
 ## 4. 运行时行为
 
-- **gate-check.js**：按 `checkpoint.workflow` 加载对应插件包 `workflow.yaml`（经 schema 校验），用当前 stage 的 `sections`/`require_verify` 校验产出物；testing/reviewing 阶段对账 verify 证据（命令 = 工作流 checks 解析结果）。插件包缺失 → 降级不阻塞（stderr 提示）。
+- **gate-check.js**：按 `checkpoint.workflow` 加载对应工作流 `workflow.yaml`（经 schema 校验），用当前 stage 的 `sections`/`require_verify` 校验产出物；testing/reviewing 阶段对账 verify 证据（命令 = 工作流 checks 解析结果）。工作流缺失 → 降级不阻塞（stderr 提示）。
 - **verify.js**：`--workflow <name>` 读取 `verify.checks` 并解析执行；无 workflow/checks 时 fallback 到命令池默认命令集。
-- **发现顺序（已实现，项目层优先）**：
-  1. `knowledge/plugins/{name}/`（项目定制，优先）
-  2. `.harness/workflows/{name}/`（通用模板，兜底）
-  项目层与通用层同名时，项目版覆盖。`node .harness/tools/workflow-init.js list` 可列出全部可用工作流。
+- **发现顺序（已实现，单一来源）**：只读 `knowledge/workflow/{name}/`（项目层，唯一工作流来源）。`.harness/workflows/{name}/` 是内置模板，**不直接加载**——需用 `workflow-init init` 实例化到项目层。`node .harness/tools/workflow-init.js list` 可列出全部可用工作流。
 
 ## 4.5 工作流模板语义与项目实例化
 
 - **通用工作流 = 工作流模板**：骨架（步骤/产出要求）通用，但测试命令、通过标准必须项目定制（"改代码用什么测试命令、怎么测算通过"由项目决定）。
-- **项目层目录 `knowledge/plugins/`**（项目根，git 跟踪，与 knowledge/ 同属项目层）：放项目定制工作流插件包。
+- **项目层目录 `knowledge/workflow/`**（项目根，git 跟踪，与 knowledge/ 同属项目层）：放项目定制工作流。
 - **实例化**：`knowledge-init workflow-init init <name>`（或 `node .harness/tools/workflow-init.js init <name>`）把模板复制到项目层并绑定项目命令池；`sync <name>` 同步上游模板更新（只补齐未定制部分）；`list` 列出可用工作流。
 - 项目版可自由增删阶段、改 gate、改 sections、绑定项目命令——不碰通用模板（父类保持纯净）。
 
-## 5. 自定义工作流步骤（如何新增插件包）
+## 5. 自定义工作流步骤（如何新增工作流）
 
 1. 建目录 `workflows/{name}/`，写 `workflow.yaml`（按 §2 字段）
 2. 声明 `verify.checks`（内置 check 或命令池 key）
-3. 需要项目专属校验时：命令池加 key，或内置 check 提交到 `.harness/tools/`（通用）——**项目专属脚本**放项目层插件包 `check/`（第二批 knowledge/plugins 支持）
-4. 用 `node .harness/tools/workflow-validate.js` 校验插件包合法性
+3. 需要项目专属校验时：命令池加 key，或内置 check 提交到 `.harness/tools/`（通用）——**项目专属脚本**放项目层工作流 `check/`（第二批 knowledge/workflow 支持）
+4. 用 `node .harness/workflows/workflow-creation/check/workflow-check.js --target <name>` 校验工作流合法性
 5. harness.md 启动时选择该工作流即可
 
 ## 6. 与 DSH 的关系
 
 - 本规范是**通用层**能力（main 分支），不依赖 DSH 环境
-- DSH 编排器与确定性门禁从工作流插件包读取定义（sections/permission/tools/verify 均来自 workflow.yaml）——`dsh/stage-schema.json` 已删除，数据迁入插件包，单一真相源不分裂
-- DSH preset 可消费工作流插件包（可选适配，非必需）
+- DSH 编排器与确定性门禁从工作流读取定义（sections/permission/tools/verify 均来自 workflow.yaml）——`dsh/stage-schema.json` 已删除，数据迁入工作流，单一真相源不分裂
+- DSH preset 可消费工作流（可选适配，非必需）

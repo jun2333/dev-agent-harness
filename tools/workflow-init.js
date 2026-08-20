@@ -3,13 +3,13 @@
 /**
  * workflow-init.js — 工作流模板实例化工具（workflow-init 技能的确定性操作）
  *
- * 模板语义：.harness/workflows/{name}/ 是通用模板（骨架），knowledge/plugins/{name}/ 是项目定制实例。
+ * 模板语义：.harness/workflows/{name}/ 是通用模板（骨架），knowledge/workflow/{name}/ 是项目定制实例。
  * 本工具负责"模板 → 项目实例"的确定性操作；语义判断（哪些字段该定制、sync 冲突裁决）
  * 由 knowledge-init 的 workflow-init 技能文档承载。
  *
  * 用法：
  *   node workflow-init.js init <name> [--as <new-name>] [--force]
- *     - 把通用模板复制到 knowledge/plugins/{new-name||name}/workflow.yaml
+ *     - 把通用模板复制到 knowledge/workflow/{new-name||name}/workflow.yaml
  *     - 校验命令池绑定：模板 verify.checks 中的命令池 key 必须存在于 verify.config.json（内置 check 跳过）
  *     - 内置 check（skill-check/workflow-check）在项目副本可生成 check/ 占位说明
  *     - --force 跳过命令池校验
@@ -28,7 +28,7 @@ const {
   listWorkflows,
   readVerifyConfig,
   findWorkflowFile,
-  PROJECT_PLUGINS_DIR,
+  PROJECT_WORKFLOWS_DIR,
 } = require('./workflow-lib.js');
 
 function findHarnessRoot(startDir) {
@@ -71,7 +71,7 @@ function parseWorkflowFile(file, fallbackName) {
   };
 }
 
-/** 命令池 key 校验：返回 { missing: string[] }（内置 check + 插件自带 check 脚本不算 key） */
+/** 命令池 key 校验：返回 { missing: string[] }（内置 check + 工作流自带 check 脚本不算 key） */
 function checkCommandPool(root, wfDef) {
   const checks = (wfDef && wfDef.verify && wfDef.verify.checks) || [];
   if (!Array.isArray(checks) || checks.length === 0) return { missing: [] };
@@ -84,7 +84,7 @@ function checkCommandPool(root, wfDef) {
     missing: checks.filter((c) => {
       if (builtin.has(c)) return false; // 框架内置 check
       if (poolKeys.has(c)) return false; // 命令池 key
-      // 插件自带 check 脚本（模板目录 check/{c}.js 存在）→ 不依赖命令池，随插件复制
+      // 工作流自带 check 脚本（模板目录 check/{c}.js 存在）→ 不依赖命令池，随工作流复制
       if (fs.existsSync(path.join(root, '.harness', 'workflows', wfDef.name, 'check', `${c}.js`))) return false;
       return true;
     }),
@@ -101,7 +101,7 @@ function cmdInit(root, name, asName, force) {
   }
 
   const target = asName || name;
-  const targetDir = path.join(root, PROJECT_PLUGINS_DIR, target);
+  const targetDir = path.join(root, PROJECT_WORKFLOWS_DIR, target);
   const targetFile = path.join(targetDir, 'workflow.yaml');
   if (fs.existsSync(targetFile)) {
     console.error(`[workflow-init] 项目层已存在 ${target}（${targetFile}），先 sync 或删除后再 init`);
@@ -121,7 +121,7 @@ function cmdInit(root, name, asName, force) {
     process.exit(2);
   }
 
-  // 复制整个插件目录（workflow.yaml + check/ + templates/）
+  // 复制整个工作流目录（workflow.yaml + check/ + templates/）
   fs.mkdirSync(targetDir, { recursive: true });
   for (const entry of fs.readdirSync(templateDir)) {
     fs.cpSync(path.join(templateDir, entry), path.join(targetDir, entry), { recursive: true });
@@ -152,7 +152,7 @@ function cmdInit(root, name, asName, force) {
   // 同时校验修正后是否还有无效引用。
   normalizeSkillPaths(root, targetFile, target, name);
 
-  console.log(`[workflow-init] ✓ 已实例化 ${name} → knowledge/plugins/${target}/（source: project，含 check/templates）`);
+  console.log(`[workflow-init] ✓ 已实例化 ${name} → knowledge/workflow/${target}/（source: project，含 check/templates）`);
   if (missing.length > 0) {
     console.log(`  [警告] 命令池缺失 key（已 --force 跳过校验）：${missing.join(', ')}`);
   } else if (template.verify && template.verify.checks && template.verify.checks.length > 0) {
@@ -165,7 +165,7 @@ function cmdInit(root, name, asName, force) {
 /**
  * 路径规范化（init 与 sync 共享）：
  *   所有 skill 都是 harness 通用层（.harness/skills/）或项目层（knowledge/skills/）——
- *   不存在"插件专属 skill"（插件只引用，不复制 skill）。
+ *   不存在"工作流专属 skill"（工作流只引用，不复制 skill）。
  *   1) 隐式 `skills/...` 引用 → 显式 `.harness/skills/.../SKILL.md`（相对项目根，任何解析器可解析）
  *   2) 校验修正后是否还有无效引用
  */
@@ -209,7 +209,7 @@ function normalizeSkillPaths(root, targetFile, target, name) {
     }
   }
   if (fixed > 0) {
-    console.log(`  [路径规范化] 自动修正 ${fixed} 处 skill 引用（.md → /SKILL.md 或插件专属 → 项目内，项目副本）`);
+    console.log(`  [路径规范化] 自动修正 ${fixed} 处 skill 引用（.md → /SKILL.md 或工作流专属 → 项目内，项目副本）`);
   }
   if (issues.length > 0) {
     console.log(`  [路径规范化] ${issues.length} 处 skill 引用仍无效（需人工处理）：`);
@@ -259,7 +259,7 @@ function diffWorkflow(template, project) {
 function cmdSync(root, name) {
   const found = findWorkflowFile(root, name);
   if (!found || found.source !== 'project') {
-    console.error(`[workflow-init] 项目层没有 ${name}（knowledge/plugins/${name}/workflow.yaml）`);
+    console.error(`[workflow-init] 项目层没有 ${name}（knowledge/workflow/${name}/workflow.yaml）`);
     process.exit(2);
   }
   // 溯源：项目副本头部的 # template: {上游名}（--as 重命名时记录），无则用自身 name
