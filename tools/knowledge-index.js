@@ -126,6 +126,12 @@ function scanArchive(root) {
 /** 生成完整索引内容 */
 function generate(root) {
   const sections = [];
+
+  // 知识库根级参考文档（如 architecture / tech-decisions），排除 _index / component-index
+  const rootRefs = scanDir(root, 'knowledge', (e) => e.isFile() && e.name.endsWith('.md')
+    && e.name !== '_index.md' && e.name !== 'component-index.md');
+  if (rootRefs.length) sections.push(['## 项目参考 (Reference)', rootRefs]);
+
   const standards = scanDir(root, 'knowledge/standards', (e) => e.isFile() && e.name.endsWith('.md') && e.name !== '_index.md');
   if (standards.length) sections.push(['## 规范 (Standards)', standards]);
 
