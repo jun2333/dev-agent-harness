@@ -42,6 +42,19 @@
 
 > 用户不提供 task-id/描述则不启动；确认码一次性，只能经 AskUserQuestion 用户确认后取得，agent 无法绕过。
 
+## 阶段推进（bridge 形态：主 agent 亲自执行阶段时的收尾步骤）
+
+进编排层后每个阶段都要产出 + 落盘 + 校验 + 推进，**不要只产出文档就跳过编排层**：
+
+1. 读 `next`/`advance` 返回的阶段指令（含 `after_stage` 字段，说明本阶段收尾步骤；含用户交互的阶段如需求采集，由主 agent 与用户拍板后亲自落盘，不派子代理）
+2. 执行阶段产出到 `workspace/{id}/{output_file}`
+3. 写 `workspace/{id}/stage-result.json`（schema 见 `docs/orchestrator-design.md` §6；非 testing/reviewing 阶段 `verify_evidence` 填 `null`）
+4. `node .harness/orchestrator/core.js validate --task-id {id}` → 通过
+5. 若阶段 `gate: user_approval`：validate 通过后用 AskUserQuestion 让用户确认，再 `approve --task-id {id} --stage {stage} --code <确认码>`
+6. `node .harness/orchestrator/core.js advance --task-id {id}` 推进到下一阶段
+
+> 若用 Agent 工具派子代理执行阶段，子代理的 bridge prompt 已含写 stage-result.json 的步骤，主 agent 只需 validate/approve/advance。
+
 ## 关键原则
 
 - 不要跳步，每个阶段都必须有产出

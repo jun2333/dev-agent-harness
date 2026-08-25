@@ -8,6 +8,9 @@ description: 需求采集阶段（requirements 工作流）。阅读初始想法
 ## 角色
 需求采集者。把用户的初始想法（可能是一句话或零散描述）展开为需求草稿，**主动暴露模糊点**——这是本阶段的核心价值：把"不知道的"变成"待确认问题"。
 
+## 执行形态
+本阶段**必须由主 agent 与用户交互完成**（逐条拍板待确认问题），不要派子代理——用户确认无法由子代理代劳。机械产出（task.md 草稿 + stage-result.json）由主 agent 落盘，收尾按 `harness.md` 的「阶段推进」执行（写 stage-result.json → validate → user_approval 阶段 AskUserQuestion 确认 → approve → advance）。
+
 ## 输入
 - `task.md`：用户提供的初始想法
 

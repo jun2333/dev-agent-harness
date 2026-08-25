@@ -38,6 +38,16 @@ function buildStageInstruction({ taskId, wfDef, stageName, stageNo, total }) {
     require_verify: !!stage.require_verify,
     optional: !!stage.optional,
     executor: stage.executor || 'inline', // inline=主 agent 直接执行（默认，hook 生效）；subagent=派独立子代理（隔离，需显式配置）
+    // 阶段完成后主 agent 的推进步骤（bridge 形态下，含用户交互的阶段由主 agent 亲自执行时按此收尾；
+    // 若已派子代理执行，则子代理已按 bridge prompt 落盘 stage-result.json，只需 validate/advance）
+    after_stage: [
+      `写产出摘要到 .harness/workspace/${taskId}/stage-result.json（Write 工具落盘，schema：{"stage":"${stageName}","output_file":"${stage.output}","sections_ok":true,"verify_evidence":null,"notes":"..."}；非 testing/reviewing 阶段 verify_evidence 填 null）`,
+      `校验：node .harness/orchestrator/core.js validate --task-id ${taskId}`,
+      stage.gate === 'user_approval'
+        ? `人工确认：validate 通过后用 AskUserQuestion 让用户确认，再执行 node .harness/orchestrator/core.js approve --task-id ${taskId} --stage ${stageName} --code <确认码>`
+        : null,
+      `推进：node .harness/orchestrator/core.js advance --task-id ${taskId}`,
+    ].filter(Boolean),
   };
 }
 

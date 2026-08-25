@@ -94,13 +94,27 @@ function cmdStart(root, workflow, desc, taskId) {
   }
   const id = taskId; // task-id 强制用户提供，不自动生成
   const tdir = path.join(root, '.harness', 'workspace', id);
+  // 幂等保护：任务已确认时提示走 core.js start，避免重跑本命令重置 user_confirmed
+  const manifestFile = path.join(tdir, 'task.manifest.json');
+  if (fs.existsSync(manifestFile)) {
+    try {
+      const existing = JSON.parse(fs.readFileSync(manifestFile, 'utf8'));
+      if (existing.user_confirmed && existing.task_id === id) {
+        console.error(
+          `[harness] 任务 ${id} 已确认（user_confirmed=true）。请勿重跑 harness start（会重置确认状态）；` +
+            `确认码已生成过，直接执行：node ${ORCHESTRATOR} start --task-id ${id} --code <确认码>`
+        );
+        process.exit(1);
+      }
+    } catch { /* manifest 损坏则照常重建 */ }
+  }
   fs.mkdirSync(tdir, { recursive: true });
   fs.writeFileSync(
     path.join(tdir, 'task.md'),
     `# ${desc}\n\n## Summary for downstream\n\n${desc}\n`
   );
   fs.writeFileSync(
-    path.join(tdir, 'task.manifest.json'),
+    manifestFile,
     JSON.stringify(
       {
         workflow,
