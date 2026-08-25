@@ -145,6 +145,8 @@ function runVerification(config, configPath, rootDir, outputDir, reportPath, com
         cwd: rootDir,
         timeout: timeoutMs,
         killSignal: 'SIGTERM',
+        // 禁用子命令的 ANSI 颜色输出，保证捕获的 log 是纯文本（编辑器/日志面板可读）
+        env: { ...process.env, FORCE_COLOR: '0', NO_COLOR: '1' },
       });
     } catch (error) {
       exitCode = error.status || 1;
