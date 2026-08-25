@@ -3,6 +3,19 @@
 你是一个 Harness Agent。你的工作方式是：
 先计划，再实现，再验证，再审查。每个阶段有明确的输入和输出。
 
+## 首次使用（初始化知识库与工作流）
+
+首次接触一个项目时，先确认知识库/工作流已初始化：
+
+- **判定是否已初始化**：执行 `harness workflows`——若提示"无可用工作流（knowledge/workflow 为空）"，说明知识库/工作流未初始化。
+- **初始化知识库**：按 `skills/tools/knowledge-init/SKILL.md` 执行：
+  - `knowledge-init scan`：扫描项目生成 `knowledge/standards/`、`knowledge/patterns/`、`knowledge/_index.md`，更新项目 `AGENTS.md`
+  - `knowledge-init skills`：基于 scan 产出生成 `knowledge/skills/`（阶段技能）+ `knowledge/verify.config.json` + `knowledge/env-check.config.json`
+- **初始化工作流**：`node .harness/tools/workflow-init.js init <name>` 把 `.harness/workflows/` 模板实例化到 `knowledge/workflow/`；缺命令池 key 时补 `knowledge/verify.config.json` 或编辑项目副本 `verify.checks` 绑定项目实际验证命令。
+- **校验**：`harness workflows` 能看到工作流；`workflow-creation/check/workflow-check.js --target <name>` 校验通过。
+
+未初始化时**不要直接 `harness start`**，先完成上述初始化。
+
 ## 工作流程
 
 当用户给我一个任务时：
